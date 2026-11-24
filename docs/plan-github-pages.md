@@ -1,6 +1,11 @@
 # Plan: versión GitHub Pages con sincronización cifrada (opción A)
 
-Fecha: 23 nov 2026 · Estado: **propuesto, pendiente de aprobación**
+Fecha: 23 nov 2026 · Estado: **aprobado**; fase 0 hecha (commit `d336f81`, etiqueta `v-pc-original`); fase 1 en curso.
+
+Decisiones del usuario (23 nov 2026):
+- Tailscale y `acceso.py` se eliminan (fase 1); ya no se usarán.
+- Nunca se edita a la vez en PC e iPhone: ante un choque, la app avisa y se detiene (sin fusión automática).
+- Autenticación: clave única (sin usuario). Face ID opcional más adelante.
 Respaldo previo: `Desktop\Finanzas personales - respaldo 2026-11-23` (copia idéntica verificada).
 
 ## Idea central

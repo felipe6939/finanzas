@@ -11,7 +11,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from .. import __version__, acceso, config, demo, respaldo
+from .. import __version__, config, demo, respaldo
 from ..analytics import reporte, resumen
 from ..core import formato
 from ..core.fechas import Mes, hoy
@@ -23,7 +23,6 @@ from ..services.errores import ErrorValidacion
 from . import reporte_pdf
 
 DIR = Path(__file__).parent
-COOKIE_SESION = "finanzas_sesion"
 plantillas = Jinja2Templates(directory=str(DIR / "templates"))
 plantillas.env.filters.update(
     cop=formato.cop, cop_corto=formato.cop_corto, fecha=formato.fecha_corta,
@@ -83,21 +82,8 @@ def crear_app() -> FastAPI:
     respaldo.respaldo_diario(con_inicial)
     con_inicial.close()
 
-    intentos = acceso.Intentos()
-    app.state.intentos = intentos
-    app.state.remoto_url = None  # lo fija `finanzas iniciar` si escucha en Tailscale
-    LIBRES = ("/acceso", "/static/", "/manifest.webmanifest")
-
     @app.middleware("http")
     async def proteger(request: Request, call_next):
-        ip = request.client.host if request.client else None
-        local = acceso.es_local(ip)
-        request.state.local = local
-        # Desde otro equipo: solo por Tailscale y solo si el acceso remoto está activado.
-        if not local and not (acceso.remoto_activo() and acceso.es_tailscale(ip)):
-            return Response("Acceso no permitido.", status_code=403)
-        if not acceso.host_permitido(request.headers.get("host", "")):
-            return Response("Host no permitido.", status_code=400)
         # Impide que otra página web abierta en el navegador envíe formularios a esta app.
         if request.method not in ("GET", "HEAD"):
             origen = request.headers.get("origin") or request.headers.get("referer")
@@ -106,11 +92,6 @@ def crear_app() -> FastAPI:
                 if host != request.headers.get("host") and host not in (
                         f"127.0.0.1:{config.PUERTO}", f"localhost:{config.PUERTO}", "testserver"):
                     return Response("Origen no permitido", status_code=403)
-        if not local and not request.url.path.startswith(LIBRES) \
-                and not acceso.sesion_valida(request.cookies.get(COOKIE_SESION)):
-            destino = request.url.path + (f"?{request.url.query}" if request.url.query else "")
-            siguiente = destino if request.method == "GET" else "/"
-            return RedirectResponse("/acceso?" + urlencode({"siguiente": siguiente}), status_code=303)
         request.state.con = conectar()
         try:
             respuesta = await call_next(request)
@@ -129,7 +110,6 @@ def crear_app() -> FastAPI:
             error=request.query_params.get("error"),
             hoy=hoy(),
             mes_inicio=Mes.de(catalogos.fecha_inicio(con)),
-            es_remoto=not request.state.local,
             # Para el autocompletado de #categoría en los registros rápidos y al importar texto.
             etiquetas_json=json.dumps(interprete.etiquetas_categorias(importacion.categorias_ctx(con)),
                                       ensure_ascii=False).replace("</", "<\\/"),
@@ -489,41 +469,6 @@ def crear_app() -> FastAPI:
             return ir(volver, error=" ".join(e.errores))
         return ir(volver, ok=msg)
 
-    # --------------------------------------------------------------- acceso desde el iPhone
-
-    def _siguiente_seguro(valor: str | None) -> str:
-        return valor if valor and valor.startswith("/") and not valor.startswith("//") else "/"
-
-    @app.get("/acceso", response_class=HTMLResponse)
-    def pantalla_acceso(request: Request, siguiente: str | None = None, error: str | None = None):
-        if request.state.local:
-            return ir(_siguiente_seguro(siguiente))
-        return plantillas.TemplateResponse(request, "acceso.html", {
-            "request": request, "siguiente": _siguiente_seguro(siguiente), "error": error, "version": __version__})
-
-    @app.post("/acceso")
-    async def entrar(request: Request):
-        form = await request.form()
-        siguiente = _siguiente_seguro(form.get("siguiente"))
-        ip = request.client.host if request.client else "?"
-        if intentos.bloqueado(ip):
-            return ir("/acceso", siguiente=siguiente,
-                      error="Demasiados intentos fallidos. Espera 15 minutos y vuelve a intentarlo.")
-        if not acceso.verificar(form.get("clave", "")):
-            intentos.fallo(ip)
-            return ir("/acceso", siguiente=siguiente, error="Clave incorrecta.")
-        intentos.exito(ip)
-        r = RedirectResponse(siguiente, status_code=303)
-        r.set_cookie(COOKIE_SESION, acceso.crear_sesion(), max_age=acceso.DURACION_SESION,
-                     httponly=True, samesite="lax", path="/")
-        return r
-
-    @app.post("/salir")
-    def salir():
-        r = RedirectResponse("/acceso", status_code=303)
-        r.delete_cookie(COOKIE_SESION, path="/")
-        return r
-
     @app.get("/manifest.webmanifest")
     def manifiesto():
         return Response(json.dumps({
@@ -579,11 +524,6 @@ def crear_app() -> FastAPI:
             total_punto_partida=punto_partida.total(con),
             hoy=hoy(),
             ruta_datos=config.dir_datos(),
-            acceso_tiene_clave=acceso.tiene_clave(),
-            acceso_remoto=acceso.remoto_activo(),
-            acceso_url=request.app.state.remoto_url,
-            tailscale=acceso.datos_tailscale() if request.state.local else None,
-            puerto=config.PUERTO,
             **contexto_formulario(con),
         )
 
@@ -664,18 +604,6 @@ def crear_app() -> FastAPI:
             elif seccion == "regla-eliminar":
                 catalogos.eliminar_regla(con, int(form.get("id")))
                 msg = "Regla eliminada."
-            elif seccion.startswith("acceso-") and not request.state.local:
-                return ir("/configuracion", error="El acceso desde el iPhone solo se configura desde el computador.")
-            elif seccion == "acceso-clave":
-                acceso.fijar_clave(form.get("nueva", ""), form.get("confirmacion", ""), form.get("actual"))
-                msg = "Clave de acceso guardada. Las sesiones abiertas en otros dispositivos se cerraron."
-            elif seccion == "acceso-activar":
-                acceso.activar_remoto(True)
-                msg = ("Acceso desde el iPhone activado." if request.app.state.remoto_url else
-                       "Acceso desde el iPhone activado. Cierra y vuelve a abrir la app para que empiece a escuchar en Tailscale.")
-            elif seccion == "acceso-desactivar":
-                acceso.activar_remoto(False)
-                msg = "Acceso desde el iPhone desactivado. Las sesiones abiertas se cerraron."
             elif seccion == "respaldo":
                 ruta = respaldo.crear_respaldo(con, "manual")
                 msg = f"Respaldo creado: {ruta.name}"

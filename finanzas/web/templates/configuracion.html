@@ -259,47 +259,4 @@
     {% endif %}
   </section>
 </div>
-<section class="tarjeta" id="acceso-iphone" style="margin-top:16px">
-  <header><h2>Acceso desde el iPhone</h2><span class="muted">por la red privada de Tailscale</span></header>
-  {% if es_remoto %}
-    <p class="sec" style="margin-top:0">Estás conectado desde otro dispositivo. La clave y la activación del acceso solo se cambian desde el computador.</p>
-  {% else %}
-  <p class="sec pequeno" style="margin-top:0">Abre esta app desde tu iPhone, en cualquier lugar, sin publicarla en internet: solo tus dispositivos conectados a tu cuenta de Tailscale pueden llegar a ella, y además piden esta clave. Desde este computador no se pide clave. Guía completa: <code>docs/acceso-iphone.md</code>.</p>
-  <div class="rejilla r-2" style="gap:20px">
-    <div>
-      <h3 style="margin:0 0 8px">1. Estado</h3>
-      <table><tbody>
-        <tr><td>Tailscale en este computador</td><td class="der">{% if tailscale.ip %}<span class="chip ok">conectado · {{ tailscale.ip }}</span>{% elif tailscale.instalado %}<span class="chip">instalado, sin conectar</span>{% else %}<span class="chip">no instalado</span>{% endif %}</td></tr>
-        <tr><td>Clave de acceso</td><td class="der">{% if acceso_tiene_clave %}<span class="chip ok">creada</span>{% else %}<span class="chip">falta crearla</span>{% endif %}</td></tr>
-        <tr><td>Acceso desde el iPhone</td><td class="der">{% if acceso_remoto %}<span class="chip ok">activado</span>{% else %}<span class="chip">desactivado</span>{% endif %}</td></tr>
-        <tr><td>La app escucha en Tailscale</td><td class="der">{% if acceso_url %}<span class="chip ok">sí</span>{% elif acceso_remoto %}<span class="chip">reinicia la app</span>{% else %}<span class="chip">no</span>{% endif %}</td></tr>
-      </tbody></table>
-      {% if acceso_remoto and tailscale.ip %}
-        <p class="aviso-pp">En el iPhone abre en Safari:<br>
-          <strong>http://{{ tailscale.nombre or tailscale.ip }}:{{ puerto }}</strong>
-          {% if tailscale.nombre %}<br><span class="muted pequeno">o http://{{ tailscale.ip }}:{{ puerto }}</span>{% endif %}</p>
-      {% endif %}
-      <div class="acciones">
-        {% if acceso_remoto %}
-          <form method="post" action="/configuracion/acceso-desactivar" onsubmit="return confirm('¿Desactivar el acceso desde el iPhone? Se cerrarán las sesiones abiertas.')"><button class="btn peligro">Desactivar acceso</button></form>
-        {% else %}
-          <form method="post" action="/configuracion/acceso-activar"><button class="btn primario" {{ 'disabled' if not acceso_tiene_clave }}>Activar acceso desde el iPhone</button></form>
-        {% endif %}
-      </div>
-    </div>
-    <div>
-      <h3 style="margin:0 0 8px">2. {{ "Cambiar la clave" if acceso_tiene_clave else "Crear la clave de acceso" }}</h3>
-      <form method="post" action="/configuracion/acceso-clave">
-        <div class="campos">
-          {% if acceso_tiene_clave %}<div style="grid-column:1/-1"><label>Clave actual</label><input type="password" name="actual" autocomplete="current-password" required></div>{% endif %}
-          <div><label>Clave nueva</label><input type="password" name="nueva" autocomplete="new-password" minlength="6" required></div>
-          <div><label>Repítela</label><input type="password" name="confirmacion" autocomplete="new-password" minlength="6" required></div>
-        </div>
-        <p class="muted pequeno">Mínimo 6 caracteres; mejor 8 o más, con letras y números. Tras 5 intentos fallidos el dispositivo se bloquea 15 minutos. Si la cambias, se cierran las sesiones abiertas en el iPhone.</p>
-        <div class="acciones"><button class="btn">Guardar clave</button></div>
-      </form>
-    </div>
-  </div>
-  {% endif %}
-</section>
 {% endblock %}

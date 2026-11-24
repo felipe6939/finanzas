@@ -27,8 +27,8 @@ con plantillas Jinja2 y ECharts (local). Arquitectura y decisiones: `docs/arquit
   `analytics/reporte.py` arma el reporte PDF con corte a hoy usando esas definiciones.
 - `finanzas/web` — app web (solo 127.0.0.1:8765). `web/reporte_pdf.py`: gráficos SVG y HTML→PDF con Edge/Chrome.
 - `finanzas/cli.py` — comandos `python -m finanzas ...`.
-- `finanzas/acceso.py` — acceso desde el iPhone por Tailscale con clave (guía `docs/acceso-iphone.md`).
-  `data/acceso.json` guarda el hash de la clave: no leerlo ni mostrarlo. Nunca escuchar en 0.0.0.0.
+- Acceso desde el iPhone: Tailscale se eliminó (23 nov 2026). La versión GitHub Pages con datos
+  cifrados en un repo privado está en desarrollo: `docs/plan-github-pages.md`. Nunca escuchar en 0.0.0.0.
 - `finanzas/respaldo.py`, `finanzas/demo.py` — respaldos/exportación, datos de ejemplo/reinicio.
 
 ## Comandos

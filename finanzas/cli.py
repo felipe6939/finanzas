@@ -43,41 +43,17 @@ def cmd_iniciar(args) -> None:
 
     import socket
 
-    from . import acceso
-
     url = f"http://{config.HOST}:{config.PUERTO}"
     app = crear_app()
-    direcciones = [config.HOST]
-    if acceso.remoto_activo():
-        ts = acceso.datos_tailscale()
-        if ts["ip"]:
-            direcciones.append(ts["ip"])
-            app.state.remoto_url = f"http://{ts['nombre'] or ts['ip']}:{config.PUERTO}"
-        else:
-            _salida("Aviso: el acceso desde el iPhone está activado, pero Tailscale no está conectado en este "
-                    "computador. Conéctalo y vuelve a abrir la app.")
-    sockets = []
-    for host in direcciones:  # solo este equipo y, si aplica, la IP privada de Tailscale; nunca 0.0.0.0
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        if hasattr(socket, "SO_EXCLUSIVEADDRUSE"):  # Windows: que otra copia no comparta el puerto
-            s.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
-        try:
-            s.bind((host, config.PUERTO))
-        except OSError as e:
-            s.close()
-            if host == config.HOST:
-                raise
-            _salida(f"Aviso: no se pudo escuchar en Tailscale ({host}): {e}")
-            app.state.remoto_url = None
-            continue
-        sockets.append(s)
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    if hasattr(socket, "SO_EXCLUSIVEADDRUSE"):  # Windows: que otra copia no comparta el puerto
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+    s.bind((config.HOST, config.PUERTO))  # solo este equipo; nunca 0.0.0.0
     if not args.sin_navegador:
         threading.Timer(1.5, lambda: webbrowser.open(url)).start()
     _salida(f"Finanzas personales en {url}  (Ctrl+C para detener)")
-    if app.state.remoto_url:
-        _salida(f"Desde el iPhone (Tailscale): {app.state.remoto_url}")
     servidor = uvicorn.Server(uvicorn.Config(app, log_level="warning"))
-    servidor.run(sockets=sockets)
+    servidor.run(sockets=[s])
 
 
 # --------------------------------------------------------------- importación
