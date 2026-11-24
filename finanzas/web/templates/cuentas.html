@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+{% block titulo %}Cuentas{% endblock %}
+{% block contenido %}
+<div class="cabecera">
+  <div>
+    <h1>Cuentas</h1>
+    <div class="sub">
+      {% if vista == "mes" %}Cómo se movió el dinero de cada cuenta en {{ mes.nombre }} de {{ mes.anio }}{% if programado %}, incluidos los programados del mes{% endif %}.
+      {% else %}Dinero en cada cuenta sumando todos los meses{% if programado %}, incluidos los programados{% endif %}.{% endif %}
+    </div>
+  </div>
+  <nav class="segmento" aria-label="Submódulos de cuentas">
+    <a href="/cuentas" {% if vista == "mes" %}class="activo" aria-current="page"{% endif %}>Cuentas {{ mes.etiqueta }}</a>
+    <a href="/cuentas?vista=total" {% if vista == "total" %}class="activo" aria-current="page"{% endif %}>Cuentas Total</a>
+  </nav>
+</div>
+
+{% if vista == "mes" %}
+<div class="rejilla r-kpi r-kpi-4" style="margin-bottom:16px">
+  <div class="tarjeta kpi">
+    <div class="etiqueta">Al empezar {{ mes.nombre }}</div>
+    <div class="valor">{{ inicio|cop }}</div>
+    <div class="delta">Saldo de tus cuentas el 1 de {{ mes.nombre }}</div>
+  </div>
+  <div class="tarjeta kpi">
+    <div class="etiqueta">Entró en el mes</div>
+    <div class="valor">{{ entradas|cop }}</div>
+    <div class="delta">Ingresos, pagos recibidos y lo que llegó de otra cuenta</div>
+  </div>
+  <div class="tarjeta kpi">
+    <div class="etiqueta">Salió en el mes</div>
+    <div class="valor">{{ salidas|cop }}</div>
+    <div class="delta">Gastos y lo que enviaste a otra cuenta</div>
+  </div>
+  <div class="tarjeta kpi destacado">
+    <div class="etiqueta">Al final de {{ mes.nombre }}</div>
+    <div class="valor" style="color: {{ 'var(--mal-texto)' if final < 0 else 'inherit' }}">{{ final|cop }}</div>
+    <div class="delta">{% if programado %}Incluye programados: <span class="num">{{ programado|cop(true) }}</span>{% else %}Con lo registrado hasta hoy{% endif %}</div>
+  </div>
+</div>
+
+<div class="rejilla r-cuentas" style="margin-bottom:16px">
+  {% for s in saldos %}
+  <section class="tarjeta cuenta {{ 'negativa' if s.final < 0 }}">
+    <header>
+      <h2>{{ s.nombre }}</h2>
+      <span class="chip">{{ s.tipo }}</span>
+    </header>
+    <div class="saldo num">{{ s.final|cop }}</div>
+    <dl class="flujo pequeno">
+      <dt>Al empezar el mes</dt><dd class="num">{{ s.inicio|cop }}</dd>
+      {% if s.ingresos %}<dt>Ingresos</dt><dd class="num">+{{ s.ingresos|cop }}</dd>{% endif %}
+      {% if s.abonos %}<dt>Pagos recibidos</dt><dd class="num">+{{ s.abonos|cop }}</dd>{% endif %}
+      {% if s.recibido %}<dt>Llegó de otra cuenta</dt><dd class="num">+{{ s.recibido|cop }}</dd>{% endif %}
+      {% if s.gastos %}<dt>Gastos</dt><dd class="num">−{{ s.gastos|cop }}</dd>{% endif %}
+      {% if s.prestado %}<dt>Prestado</dt><dd class="num">−{{ s.prestado|cop }}</dd>{% endif %}
+      {% if s.enviado %}<dt>Enviado a otra cuenta</dt><dd class="num">−{{ s.enviado|cop }}</dd>{% endif %}
+      <dt class="total">Al final del mes</dt><dd class="num total">{{ s.final|cop }}</dd>
+    </dl>
+    <div class="detalle pequeno">
+      {% if s.programado %}<div>Incluye programados: <span class="num">{{ s.programado|cop(true) }}</span></div>{% endif %}
+      {% if s.ahorro %}<div>Apartado como ahorro este mes: <span class="num">{{ s.ahorro|cop }}</span></div>{% endif %}
+      {% if not s.entradas and not s.salidas %}<div class="muted">Sin movimientos este mes</div>{% endif %}
+    </div>
+    {% if s.final < 0 %}
+      <p class="alerta-cuenta pequeno">Saldo negativo: probablemente falta registrar un ingreso o dinero que pasaste a esta cuenta desde otra.</p>
+    {% endif %}
+    <a class="pequeno" href="/movimientos?mes={{ mes.clave }}&cuenta={{ s.id }}">Ver movimientos del mes →</a>
+  </section>
+  {% endfor %}
+</div>
+
+{% else %}
+<div class="rejilla r-kpi r-kpi-4" style="margin-bottom:16px">
+  <div class="tarjeta kpi">
+    <div class="etiqueta">Total en cuentas</div>
+    <div class="valor" style="color: {{ 'var(--mal-texto)' if total < 0 else 'inherit' }}">{{ total|cop }}</div>
+    <div class="delta">{% if programado %}Incluye programados: <span class="num">{{ programado|cop(true) }}</span>{% else %}Suma de tus {{ saldos|length }} cuentas{% endif %}</div>
+  </div>
+  <div class="tarjeta kpi">
+    <div class="etiqueta">Apartado como ahorro</div>
+    <div class="valor">{{ posicion.ahorro_acumulado|cop }}</div>
+    <div class="delta">Está dentro de tus cuentas</div>
+  </div>
+  <div class="tarjeta kpi destacado">
+    <div class="etiqueta">Disponible</div>
+    <div class="valor">{{ posicion.disponible|cop }}</div>
+    <div class="delta">Total en cuentas − ahorro</div>
+  </div>
+  <div class="tarjeta kpi">
+    <div class="etiqueta">Te deben</div>
+    <div class="valor">{{ posicion.me_deben|cop }}</div>
+    <div class="delta"><a href="/configuracion#me-deben">Fuera de tus cuentas</a></div>
+  </div>
+</div>
+
+<div class="rejilla r-cuentas" style="margin-bottom:16px">
+  {% for s in saldos %}
+  <section class="tarjeta cuenta {{ 'negativa' if s.saldo < 0 }}">
+    <header>
+      <h2>{{ s.nombre }}</h2>
+      <span class="chip">{{ s.tipo }}</span>
+    </header>
+    <div class="saldo num">{{ s.saldo|cop }}</div>
+    <div class="detalle pequeno">
+      {% if s.programado %}<div>Incluye programados: <span class="num">{{ s.programado|cop(true) }}</span></div>{% endif %}
+      {% if s.ahorro %}<div>Apartado como ahorro: <span class="num">{{ s.ahorro|cop }}</span></div>{% endif %}
+      <div class="muted">{% if s.ultima %}Último movimiento: {{ s.ultima|fecha }}{% else %}Sin movimientos{% endif %}</div>
+    </div>
+    {% if s.saldo < 0 %}
+      <p class="alerta-cuenta pequeno">Saldo negativo: probablemente falta registrar un ingreso o dinero que pasaste a esta cuenta desde otra.</p>
+    {% endif %}
+    <a class="pequeno" href="/movimientos?todos=1&cuenta={{ s.id }}">Ver movimientos →</a>
+  </section>
+  {% endfor %}
+</div>
+{% endif %}
+
+<div class="rejilla r-2">
+  <section class="tarjeta">
+    <header><h2>Mover dinero entre cuentas</h2><span class="muted">no es gasto ni ingreso</span></header>
+    <form method="post" action="/cuentas/transferir">
+      <input type="hidden" name="vista" value="{{ vista }}">
+      <div class="campos">
+        <div><label>Desde</label><select name="origen">{% for c in cuentas %}<option value="{{ c.id }}" {{ 'selected' if c.por_defecto }}>{{ c.nombre }}</option>{% endfor %}</select></div>
+        <div><label>Hacia</label><select name="destino">{% for c in cuentas %}<option value="{{ c.id }}" {{ 'selected' if c.tipo == 'efectivo' }}>{{ c.nombre }}</option>{% endfor %}</select></div>
+        <div><label>Valor</label><input type="text" name="valor" inputmode="numeric" placeholder="200.000" required></div>
+        <div><label>Fecha</label><input type="date" name="fecha" value="{{ hoy.isoformat() }}" min="{{ fecha_inicio.isoformat() }}" required></div>
+        <div style="grid-column:1/-1"><label>Nota (opcional)</label><input name="nota" placeholder="p. ej. retiro en cajero"></div>
+      </div>
+      <p class="muted pequeno">Por ejemplo, un retiro de Nequi a Efectivo o pasar plata de Bancolombia a Nequi. El total no cambia; solo cambia en qué cuenta está el dinero.</p>
+      <div class="acciones"><button class="btn primario">Registrar</button></div>
+    </form>
+  </section>
+
+  <section class="tarjeta">
+    <header><h2>Últimos movimientos entre cuentas</h2></header>
+    {% if transferencias %}
+    <table>
+      <tbody>
+      {% for t in transferencias %}
+        <tr>
+          <td><strong>{{ t.origen }} → {{ t.destino }}</strong>
+            <div class="muted pequeno">{{ t.fecha|fecha_dia }}{% if t.fecha > hoy.isoformat() %} <span class="chip prog">programado</span>{% endif %}{% if t.nota %} · {{ t.nota }}{% endif %}</div></td>
+          <td class="der num">{{ t.valor|cop }}</td>
+          <td class="der">
+            <form method="post" action="/cuentas/transferir-eliminar" onsubmit="return confirm('¿Eliminar este movimiento de {{ t.valor|cop }}?')">
+              <input type="hidden" name="vista" value="{{ vista }}">
+              <input type="hidden" name="id" value="{{ t.id }}"><button class="btn peq">Eliminar</button>
+            </form>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+      <div class="vacio">Todavía no has movido dinero entre cuentas.</div>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

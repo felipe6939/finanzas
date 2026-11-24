@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block titulo %}Importar{% endblock %}
+{% block contenido %}
+<div class="cabecera">
+  <div><h1>Importar movimientos</h1>
+  <div class="sub">Nada se registra hasta que revises y confirmes. Puedes subir el mismo archivo varias veces: solo entran las líneas nuevas.</div></div>
+</div>
+
+<div class="rejilla r-3-2">
+  <div class="pila">
+    <section class="tarjeta">
+      <header><h2>Subir archivo</h2><span class="muted">.docx o .txt</span></header>
+      <form method="post" action="/importar" enctype="multipart/form-data" class="form-linea">
+        <div><input type="file" name="archivo" accept=".docx,.txt,.md" required></div>
+        <button class="btn primario">Analizar</button>
+      </form>
+    </section>
+    <section class="tarjeta">
+      <header><h2>O pegar texto</h2><span class="muted">desde WhatsApp, notas, correo…</span></header>
+      <form method="post" action="/importar">
+        <textarea name="texto" placeholder="16/11&#10;45.000 almuerzo&#10;12k bus #transporte&#10;+3.200.000 salario bbva" required data-etiquetas></textarea>
+        <div class="muted pequeno" style="margin-top:6px">Escribe <code>#</code> para elegir la categoría de una línea.</div>
+        <div class="acciones"><button class="btn primario">Analizar</button></div>
+      </form>
+    </section>
+    <section class="tarjeta">
+      <header><h2>Importaciones</h2><span class="muted">trazabilidad de cada lote</span></header>
+      <div class="tabla-env">
+      <table>
+        <thead><tr><th>#</th><th>Fecha</th><th>Origen</th><th>Estado</th><th class="der">Movimientos</th><th></th></tr></thead>
+        <tbody>
+        {% for l in lotes %}
+          <tr>
+            <td>{{ l.id }}</td>
+            <td class="num">{{ l.creado_en[:16] }}</td>
+            <td>{{ l.archivo_nombre }}</td>
+            <td>{% set cls = {'borrador':'av','confirmado':'ok','revertido':'mal','descartado':''}[l.estado] %}
+              <span class="chip {{ cls }}">{{ l.estado|capitalize }}</span>
+              {% if l.estado == 'borrador' and l.por_revisar %}<span class="muted pequeno">{{ l.por_revisar }} por revisar</span>{% endif %}</td>
+            <td class="der num">{{ l.movimientos }}{% if l.ya_importadas %} <span class="muted pequeno">(+{{ l.ya_importadas }} ya estaban)</span>{% endif %}</td>
+            <td class="der"><a href="/importar/{{ l.id }}">{{ 'Revisar' if l.estado == 'borrador' else 'Ver' }}</a></td>
+          </tr>
+        {% else %}<tr><td colspan="6" class="muted">Aún no hay importaciones.</td></tr>{% endfor %}
+        </tbody>
+      </table>
+      </div>
+    </section>
+  </div>
+
+  <section class="tarjeta guia">
+    <header><h2>Cómo escribir tu archivo diario</h2></header>
+    <p class="sec" style="margin-top:0">Escribe la fecha en una línea y debajo los movimientos de ese día, uno por línea:</p>
+<pre>16/11
+45.000 almuerzo
+12k bus
+gasolina 80.000 bancolombia
++3.200.000 salario bbva
+ahorro 300.000 viaje
+25.500 farmacia #salud (para mamá)</pre>
+    <table>
+      <tbody>
+        <tr><th>Fecha</th><td><code>16/11</code> · <code>16 nov</code> · <code>lunes 16/11</code>. Aplica a las líneas de abajo.</td></tr>
+        <tr><th>Tipo</th><td>Sin signo = <b>gasto</b> · <code>+</code> = <b>ingreso</b> · <code>ahorro</code> = <b>ahorro</b></td></tr>
+        <tr><th>Valor</th><td><code>45.000</code> · <code>45000</code> · <code>45k</code> · <code>45 mil</code> · <code>20 lucas</code> · <code>1,2 millones</code></td></tr>
+        <tr><th>Cuenta</th><td><code>nequi</code> · <code>bancolombia</code> · <code>bbva</code> · <code>efectivo</code>. Si no la escribes: la cuenta por defecto.</td></tr>
+        <tr><th>Categoría</th><td>Opcional: <code>#salud</code>, <code>#transporte</code>… Si no, se propone según la descripción y tú confirmas.</td></tr>
+        <tr><th>Nota</th><td>Entre paréntesis: <code>(regalo mamá)</code></td></tr>
+      </tbody>
+    </table>
+    <p class="muted pequeno">Consejos: un archivo por mes (p. ej. <i>Movimientos 2026-11.docx</i>) y siempre agrega al final. No empieces líneas con <code>-</code> ni <code>*</code>: Word las convierte en viñetas (no pasa nada, pero es innecesario). Nunca escribas números de cuenta, claves ni cédula.</p>
+  </section>
+</div>
+{% endblock %}

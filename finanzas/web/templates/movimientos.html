@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% from "_macros.html" import chip_tipo, opciones_categoria %}
+{% block titulo %}Movimientos{% endblock %}
+{% block contenido %}
+<div class="cabecera">
+  <div>
+    <h1>Movimientos</h1>
+    <div class="sub">{% if f.lote %}Importados en el lote #{{ f.lote }}{% elif ver_todo %}Todo el historial{% else %}{{ mes.etiqueta }}{% endif %}</div>
+  </div>
+  <nav class="segmento" aria-label="Submódulos de movimientos">
+    <a href="/movimientos" class="activo" aria-current="page">Movimientos</a>
+    <a href="/movimientos/fijos">Gastos fijos mensuales</a>
+  </nav>
+  <div class="acciones" style="margin:0">
+    {% if not ver_todo %}
+    <div class="selector-mes">
+      {% if mes_inicio < mes %}<a href="{{ url_con(request, mes=mes.anterior().clave) }}" aria-label="Mes anterior">‹</a>{% else %}<span class="nav-off" aria-hidden="true">‹</span>{% endif %}
+      <strong>{{ mes.etiqueta }}</strong>
+      <a href="{{ url_con(request, mes=mes.siguiente().clave) }}" aria-label="Mes siguiente">›</a>
+    </div>
+    {% endif %}
+    <a class="btn primario" href="/movimientos/nuevo">+ Nuevo</a>
+  </div>
+</div>
+
+<section class="tarjeta" style="margin-bottom:16px">
+  <form class="rapido" method="post" action="/movimientos/rapido">
+    <input type="hidden" name="volver" value="{{ url_con(request) }}">
+    <input type="text" name="texto" placeholder="Registro rápido: 45.000 almuerzo nequi  ·  #categoría" autocomplete="off" data-etiquetas>
+    <input type="date" name="fecha" value="{{ hoy.isoformat() }}" min="{{ fecha_inicio.isoformat() }}">
+    <button class="btn primario">Registrar</button>
+  </form>
+</section>
+
+<section class="tarjeta">
+  <form class="filtros" method="get">
+    {% if not ver_todo %}<input type="hidden" name="mes" value="{{ mes.clave }}">{% endif %}
+    {% if f.lote %}<input type="hidden" name="lote" value="{{ f.lote }}">{% endif %}
+    <div><label>Buscar</label><input type="search" name="q" value="{{ f.q }}" placeholder="Descripción u observación"></div>
+    <div class="estrecho"><label>Tipo</label>
+      <select name="tipo" onchange="this.form.submit()">
+        <option value="">Todos</option>
+        {% for t, n in [('gasto','Gastos'),('ingreso','Ingresos'),('ahorro','Ahorro')] %}<option value="{{ t }}" {{ 'selected' if f.tipo == t }}>{{ n }}</option>{% endfor %}
+      </select></div>
+    <div><label>Categoría</label>
+      <select name="categoria" onchange="this.form.submit()">
+        <option value="">Todas</option>
+        {% if f.tipo != 'ingreso' %}<optgroup label="── Gastos ──"></optgroup>{{ opciones_categoria(categorias_gasto, f.categoria) }}{% endif %}
+        {% if f.tipo != 'gasto' %}<optgroup label="── Ingresos ──"></optgroup>{{ opciones_categoria(categorias_ingreso, f.categoria) }}{% endif %}
+      </select></div>
+    <div class="estrecho"><label>Cuenta</label>
+      <select name="cuenta" onchange="this.form.submit()">
+        <option value="">Todas</option>
+        {% for c in cuentas %}<option value="{{ c.id }}" {{ 'selected' if f.cuenta == c.id }}>{{ c.nombre }}</option>{% endfor %}
+      </select></div>
+    <div class="estrecho"><label>Naturaleza</label>
+      <select name="naturaleza" onchange="this.form.submit()">
+        <option value="">Todas</option>
+        {% for n in ['fijo','variable','extraordinario'] %}<option value="{{ n }}" {{ 'selected' if f.naturaleza == n }}>{{ n|capitalize }}</option>{% endfor %}
+      </select></div>
+    <div class="estrecho"><label>Necesidad</label>
+      <select name="necesidad" onchange="this.form.submit()">
+        <option value="">Todas</option>
+        {% for n in ['esencial','discrecional'] %}<option value="{{ n }}" {{ 'selected' if f.necesidad == n }}>{{ n|capitalize }}</option>{% endfor %}
+      </select></div>
+    <div class="estrecho"><button class="btn">Filtrar</button></div>
+    <div class="estrecho">
+      {% if ver_todo and not f.lote %}<a class="btn" href="/movimientos">Solo un mes</a>
+      {% else %}<a class="btn" href="/movimientos?todos=1">Todo el historial</a>{% endif %}
+    </div>
+  </form>
+
+  <div class="totales-tabla">
+    <span>{{ filas|length }} movimientos</span>
+    <span>Gastos <strong class="num">{{ totales.gasto|cop }}</strong></span>
+    <span>Ingresos <strong class="num">{{ totales.ingreso|cop }}</strong></span>
+    <span>Ahorro <strong class="num">{{ totales.ahorro|cop }}</strong></span>
+  </div>
+
+  <div class="tabla-env">
+  <table>
+    <thead><tr><th>Fecha</th><th>Descripción</th><th>Categoría</th><th>Cuenta</th><th>Tipo</th><th class="der">Valor</th></tr></thead>
+    <tbody>
+    {% for m in filas %}
+      <tr>
+        <td class="num">{{ m.fecha|fecha_dia }}{% if m.fecha > hoy.isoformat() %} <span class="chip prog">programado</span>{% endif %}</td>
+        <td><a href="/movimientos/{{ m.id }}">{{ m.descripcion }}</a>
+          {% if m.observaciones %}<div class="muted pequeno">{{ m.observaciones }}</div>{% endif %}</td>
+        <td>{% if m.tipo == 'ahorro' %}<span class="sec">{{ m.meta or 'Ahorro general' }}</span>
+            {% else %}{{ m.categoria_principal }}{% if m.categoria_padre %} <span class="muted">› {{ m.categoria }}</span>{% endif %}
+            <div class="muted pequeno">{{ m.naturaleza or '' }}{{ ' · ' ~ m.necesidad if m.necesidad }}</div>{% endif %}</td>
+        <td>{{ m.cuenta }}</td>
+        <td>{{ chip_tipo(m.tipo) }}{% if m.origen == 'importacion' %} <a class="chip" href="/importar/{{ m.lote_id }}" title="Importado en el lote #{{ m.lote_id }}">lote {{ m.lote_id }}</a>{% elif m.origen == 'demo' %} <span class="chip av">ejemplo</span>{% endif %}</td>
+        <td class="der num v-{{ m.tipo }}"><strong>{{ '+' if m.tipo == 'ingreso' }}{{ m.valor|cop }}</strong></td>
+      </tr>
+    {% else %}
+      <tr><td colspan="6"><div class="vacio"><strong>Sin movimientos</strong>Ajusta los filtros o registra uno nuevo.</div></td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+{% endblock %}

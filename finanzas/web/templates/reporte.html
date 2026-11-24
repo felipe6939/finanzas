@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reporte de finanzas · {{ d.corte|fecha }}</title>
+<style>
+  @page { size: A4; margin: 14mm 13mm 14mm 13mm; }
+  * { box-sizing: border-box; }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { margin: 0; background: #fff; color: #0b0b0b; font: 10.5pt/1.45 "Segoe UI", Arial, sans-serif; }
+  .hoja { max-width: 186mm; margin: 0 auto; }
+  .barra { position: sticky; top: 0; background: #f1f0ec; padding: 10px 16px; display: flex; gap: 10px;
+           align-items: center; justify-content: space-between; border-bottom: 1px solid #ddd; margin-bottom: 18px; }
+  .barra a { color: #2a78d6; text-decoration: none; font-weight: 600; }
+  .barra .btn { background: #2a78d6; color: #fff; padding: 7px 14px; border-radius: 8px; }
+  @media print { .barra { display: none; } }
+  @media screen { .hoja { padding: 0 16px 40px; } }
+  header.portada { border-bottom: 2px solid #0b0b0b; padding-bottom: 10px; margin-bottom: 16px; }
+  header.portada h1 { font-size: 20pt; margin: 0 0 2px; letter-spacing: -0.01em; }
+  header.portada .sub { color: #52514e; }
+  h2 { font-size: 13pt; margin: 22px 0 8px; padding-bottom: 4px; border-bottom: 1px solid #e6e5e0; break-after: avoid; }
+  h3 { font-size: 10.5pt; margin: 14px 0 6px; color: #52514e; break-after: avoid; }
+  .bloque { break-inside: avoid; }
+  .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 8px 0 10px; }
+  .tile { border: 1px solid #e6e5e0; border-radius: 8px; padding: 8px 10px; break-inside: avoid; }
+  .tile .et { font-size: 8.5pt; color: #52514e; }
+  .tile .v { font-size: 14pt; font-weight: 650; letter-spacing: -0.01em; white-space: nowrap; }
+  .tile .n { font-size: 8pt; color: #898781; }
+  .tile.dest { background: #e6f0fc; border-color: #b9d3f3; }
+  table { width: 100%; border-collapse: collapse; font-size: 9.5pt; }
+  th { text-align: left; font-weight: 600; color: #52514e; font-size: 8.5pt; border-bottom: 1px solid #d5d4ce; padding: 4px 6px; }
+  td { padding: 4px 6px; border-bottom: 1px solid #efeee9; vertical-align: top; }
+  tr { break-inside: avoid; }
+  .der { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .total td { font-weight: 650; border-top: 1px solid #0b0b0b; border-bottom: none; }
+  .neg { color: #b02a2a; }
+  .pos { color: #006300; }
+  .muted { color: #898781; }
+  .peq { font-size: 8.5pt; }
+  .nota { font-size: 8.5pt; color: #52514e; background: #f7f6f2; border-radius: 6px; padding: 6px 9px; margin: 6px 0; }
+  .obs { list-style: none; padding: 0; margin: 0; }
+  .obs li { padding: 6px 10px 6px 12px; margin-bottom: 5px; border-left: 3px solid #b5b3ab; background: #f7f6f2;
+            border-radius: 0 6px 6px 0; break-inside: avoid; }
+  .obs li.alerta { border-color: #d03b3b; background: #fbeaea; }
+  .obs li.bueno { border-color: #0ca30c; background: #e7f5e7; }
+  .obs li b { font-size: 8pt; text-transform: uppercase; letter-spacing: 0.04em; margin-right: 6px; }
+  .leyenda { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 8.5pt; color: #52514e; margin-top: 4px; }
+  .leyenda i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+  .dos { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .barrita { height: 6px; background: #efeee9; border-radius: 3px; overflow: hidden; min-width: 60px; }
+  .barrita span { display: block; height: 100%; background: #1baf7a; border-radius: 3px; }
+  .chip { display: inline-block; font-size: 7.5pt; padding: 0 6px; border-radius: 9px; background: #f1f0ec; color: #52514e; }
+  footer { margin-top: 24px; padding-top: 8px; border-top: 1px solid #e6e5e0; font-size: 8pt; color: #898781; }
+  svg text { font-family: "Segoe UI", Arial, sans-serif; }
+  @media screen and (max-width: 640px) { .tiles { grid-template-columns: 1fr 1fr; } .dos { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+{% if vista_previa %}
+<div class="barra">
+  <a href="/">← Volver</a>
+  <span class="peq">Vista previa del reporte</span>
+  <a class="btn" href="/reporte.pdf">Descargar PDF</a>
+</div>
+{% endif %}
+{% set a = d.mes_actual %}
+{% set nombre_mes = d.mes.nombre ~ " " ~ d.mes.anio %}
+{% set rango_mes = (d.desde_mes|fecha) ~ " al " ~ (d.corte|fecha) %}
+{% set ns = namespace(n=5) %}
+<div class="hoja">
+
+<header class="portada">
+  <h1>Reporte de finanzas personales</h1>
+  <div class="sub">Datos al <strong>{{ titulo_fecha(d.corte) }}</strong> · desde el inicio del sistema ({{ d.inicio|fecha }})</div>
+  <div class="peq muted">Generado el {{ d.generado.strftime("%d/%m/%Y a las %H:%M") }} · cifras en pesos colombianos</div>
+</header>
+
+{% if d.corte < d.inicio %}
+  <p class="nota">El sistema empieza el {{ d.inicio|fecha }}: todavía no hay cifras para reportar.</p>
+{% else %}
+
+<!-- 1. Cuánto tengo -->
+<section class="bloque">
+  <h2>1. ¿Cuánto dinero tienes?</h2>
+  <div class="tiles">
+    <div class="tile"><div class="et">Total en cuentas</div><div class="v {{ 'neg' if d.total_cuentas < 0 }}">{{ d.total_cuentas|cop }}</div><div class="n">Suma de tus cuentas</div></div>
+    <div class="tile"><div class="et">Apartado como ahorro</div><div class="v">{{ d.posicion.ahorro_acumulado|cop }}</div><div class="n">Dentro de tus cuentas</div></div>
+    <div class="tile dest"><div class="et">Disponible</div><div class="v {{ 'neg' if d.posicion.disponible < 0 }}">{{ d.posicion.disponible|cop }}</div><div class="n">Total − ahorro</div></div>
+    <div class="tile"><div class="et">Te deben</div><div class="v">{{ d.posicion.me_deben|cop }}</div><div class="n">Fuera de tus cuentas</div></div>
+  </div>
+  <table>
+    <thead><tr><th>Cuenta</th><th>Tipo</th><th class="der">Saldo</th><th class="der">% del total</th><th class="der">Apartado como ahorro</th><th>Último movimiento</th></tr></thead>
+    <tbody>
+    {% for c in d.cuentas %}
+      <tr><td>{{ c.nombre }}</td><td class="muted">{{ c.tipo }}</td>
+        <td class="der {{ 'neg' if c.saldo < 0 }}">{{ c.saldo|cop }}</td>
+        <td class="der">{{ c.participacion|pct if c.participacion else "—" }}</td>
+        <td class="der">{{ c.ahorro|cop if c.ahorro else "—" }}</td>
+        <td class="muted">{{ c.ultima|fecha if c.ultima else "Sin movimientos" }}</td></tr>
+    {% endfor %}
+      <tr class="total"><td colspan="2">Total</td><td class="der">{{ d.total_cuentas|cop }}</td><td></td><td class="der">{{ d.posicion.ahorro_acumulado|cop }}</td><td></td></tr>
+    </tbody>
+  </table>
+  {% if d.programados_cantidad %}
+  <p class="nota">Este cálculo llega hasta el {{ d.corte|fecha }}. Con los {{ d.programados_cantidad }} movimiento(s) que ya registraste con fecha posterior, tu disponible quedaría en <strong>{{ d.disponible_con_programados|cop }}</strong> (detalle en «Lo que viene»).</p>
+  {% endif %}
+</section>
+
+<!-- 2. El mes -->
+<section class="bloque">
+  <h2>2. {{ nombre_mes|capitalize }} <span class="muted peq">({{ rango_mes }}{{ ", mes en curso" if d.corte < d.mes.fin }})</span></h2>
+  <div class="tiles">
+    <div class="tile"><div class="et">Ingresos</div><div class="v">{{ a.ingresos|cop }}</div>
+      <div class="n">{% if d.punto_partida_mes %}{{ d.punto_partida_mes|cop }} son punto de partida{% elif d.anterior %}{{ d.anterior.ingresos|cop }} el mismo periodo de {{ d.anterior.mes.nombre }}{% else %}&nbsp;{% endif %}</div></div>
+    <div class="tile"><div class="et">Gastos</div><div class="v">{{ a.gastos|cop }}</div>
+      <div class="n">{% if d.anterior %}{{ d.anterior.gastos|cop }} el mismo periodo de {{ d.anterior.mes.nombre }}{% elif d.dias_mes %}{{ (a.gastos / d.dias_mes)|round|int|cop }} por día{% endif %}</div></div>
+    <div class="tile"><div class="et">Ahorro</div><div class="v">{{ a.ahorro|cop }}</div>
+      <div class="n">{% if a.tasa_ahorro is not none %}{{ a.tasa_ahorro|pct }} de los ingresos{% else %}&nbsp;{% endif %}</div></div>
+    <div class="tile dest"><div class="et">Balance (ingresos − gastos)</div><div class="v {{ 'neg' if a.balance < 0 }}">{{ a.balance|cop(true) if a.balance > 0 else a.balance|cop }}</div>
+      <div class="n">Sobrante sin el ahorro: {{ (a.balance - a.ahorro)|cop }}</div></div>
+  </div>
+  {% if not d.anterior %}<p class="peq muted">Sin comparación: no hay datos del mismo periodo del mes anterior.</p>{% endif %}
+</section>
+
+<!-- 3. A dónde va -->
+<section>
+  <h2>3. ¿A dónde va tu dinero?</h2>
+  {% if d.gastos_mes %}
+  <div class="bloque">
+    <h3>Gastos de {{ nombre_mes }} por categoría</h3>
+    {{ graficos.gastos_mes|safe }}
+  </div>
+  {% if d.naturaleza or d.necesidad %}
+  <div class="dos bloque">
+    {% if d.naturaleza %}<div>
+      <h3>Fijos, variables y extraordinarios</h3>
+      {{ graficos.naturaleza|safe }}
+      <div class="leyenda">{% for n in d.naturaleza %}<span><i style="background:{{ colores_naturaleza.get(n.clave, '#b5b3ab') }}"></i>{{ n.clave|capitalize }}: {{ n.total|cop }} ({{ n.participacion|pct }})</span>{% endfor %}</div>
+    </div>{% endif %}
+    {% if d.necesidad %}<div>
+      <h3>Esenciales y discrecionales</h3>
+      {{ graficos.necesidad|safe }}
+      <div class="leyenda">{% for n in d.necesidad %}<span><i style="background:{{ colores_necesidad.get(n.clave, '#b5b3ab') }}"></i>{{ n.clave|capitalize }}: {{ n.total|cop }} ({{ n.participacion|pct }})</span>{% endfor %}</div>
+    </div>{% endif %}
+  </div>
+  {% endif %}
+  {% if d.mayores_gastos %}
+  <div class="bloque">
+    <h3>Los {{ d.mayores_gastos|length }} gastos más grandes de {{ nombre_mes }}</h3>
+    <table>
+      <thead><tr><th>Fecha</th><th>Descripción</th><th>Categoría</th><th>Cuenta</th><th class="der">Valor</th></tr></thead>
+      <tbody>{% for m in d.mayores_gastos %}
+        <tr><td class="muted">{{ m.fecha|fecha }}</td><td>{{ m.descripcion }}</td><td class="muted">{{ m.categoria or "—" }}</td><td class="muted">{{ m.cuenta }}</td><td class="der">{{ m.valor|cop }}</td></tr>
+      {% endfor %}</tbody>
+    </table>
+  </div>
+  {% endif %}
+  {% else %}
+    <p class="nota">Aún no hay gastos registrados en {{ nombre_mes }}.</p>
+  {% endif %}
+  {% if d.meses|length > 1 and d.gastos_total %}
+  <div class="bloque">
+    <h3>Gastos desde el inicio ({{ d.inicio|fecha }} – {{ d.corte|fecha }}) por categoría</h3>
+    {{ graficos.gastos_total|safe }}
+  </div>
+  {% endif %}
+</section>
+
+<!-- 4. De dónde viene -->
+<section class="bloque">
+  <h2>4. ¿De dónde viene tu dinero?</h2>
+  {% if d.ingresos_total %}
+    <h3>Ingresos desde el inicio por categoría</h3>
+    {{ graficos.ingresos_total|safe }}
+    {% if d.ingresos_total|selectattr("nombre", "equalto", "Punto de partida")|list %}
+      <p class="nota">«Punto de partida» es el dinero que ya tenías en tus cuentas cuando empezaste a usar el sistema; se registró como ingreso del primer mes.</p>
+    {% endif %}
+  {% else %}
+    <p class="nota">Aún no hay ingresos registrados.</p>
+  {% endif %}
+</section>
+
+<!-- 5. Mes a mes -->
+<section class="bloque">
+  <h2>5. Mes a mes</h2>
+  {{ graficos.mensual|safe }}
+  <table style="margin-top:6px">
+    <thead><tr><th>Mes</th><th class="der">Ingresos</th><th class="der">Gastos</th><th class="der">Ahorro</th><th class="der">Balance</th><th class="der">Tasa de ahorro</th></tr></thead>
+    <tbody>
+    {% for m in d.meses %}
+      <tr><td>{{ m.mes.etiqueta }}{% if m.parcial %} <span class="chip">hasta el {{ d.corte.day }}</span>{% endif %}</td>
+        <td class="der">{{ m.ingresos|cop }}</td><td class="der">{{ m.gastos|cop }}</td><td class="der">{{ m.ahorro|cop }}</td>
+        <td class="der {{ 'neg' if m.balance < 0 else ('pos' if m.balance > 0) }}">{{ m.balance|cop }}</td>
+        <td class="der">{{ m.tasa_ahorro|pct }}</td></tr>
+    {% endfor %}
+    {% if d.meses|length > 1 %}
+      <tr class="total"><td>Desde el inicio</td><td class="der">{{ d.acumulado.ingresos|cop }}</td><td class="der">{{ d.acumulado.gastos|cop }}</td>
+        <td class="der">{{ d.acumulado.ahorro|cop }}</td><td class="der">{{ d.acumulado.balance|cop }}</td><td class="der">{{ d.acumulado.tasa_ahorro|pct }}</td></tr>
+    {% endif %}
+    </tbody>
+  </table>
+  {% if d.meses|selectattr("parcial")|list %}<p class="peq muted">* Mes en curso: cifras hasta el {{ d.corte|fecha }}.</p>{% endif %}
+</section>
+
+<!-- 6. Lo que viene -->
+{% if d.programados or d.transferencias_programadas %}
+{% set ns.n = ns.n + 1 %}
+<section class="bloque">
+  <h2>{{ ns.n }}. Lo que viene <span class="muted peq">(registrado con fecha posterior al {{ d.corte|fecha }}; no está sumado arriba)</span></h2>
+  <table>
+    <thead><tr><th>Fecha</th><th>Tipo</th><th>Descripción</th><th>Cuenta</th><th class="der">Valor</th></tr></thead>
+    <tbody>
+    {% for m in d.programados %}
+      <tr><td class="muted">{{ m.fecha|fecha }}</td><td>{{ m.tipo|capitalize }}</td><td>{{ m.descripcion }}</td><td class="muted">{{ m.cuenta }}</td>
+        <td class="der {{ 'pos' if m.tipo == 'ingreso' }}">{{ (m.valor if m.tipo == 'ingreso' else -m.valor)|cop(true) if m.tipo != 'ahorro' else m.valor|cop }}</td></tr>
+    {% endfor %}
+    {% for t in d.transferencias_programadas %}
+      <tr><td class="muted">{{ t.fecha|fecha }}</td><td>Entre cuentas</td><td>{{ t.origen }} → {{ t.destino }}{% if t.nota %} · {{ t.nota }}{% endif %}</td><td></td><td class="der">{{ t.valor|cop }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% if d.programados_cantidad > d.programados|length %}<p class="peq muted">Se muestran los primeros {{ d.programados|length }} de {{ d.programados_cantidad }}.</p>{% endif %}
+  <p class="nota">Ingresos programados: {{ d.programados_total.ingreso|cop }} · Gastos programados: {{ d.programados_total.gasto|cop }}{% if d.programados_total.ahorro %} · Ahorro programado: {{ d.programados_total.ahorro|cop }}{% endif %} · El efecto en tus saldos está en «Cómo quedarías con lo programado».</p>
+</section>
+{% endif %}
+
+<!-- 7. Te deben y metas -->
+{% if d.me_deben or d.metas %}
+{% set ns.n = ns.n + 1 %}
+<section class="bloque">
+  <h2>{{ ns.n }}. {% if d.me_deben %}Te deben{% endif %}{% if d.me_deben and d.metas %} y metas de ahorro{% elif d.metas %}Metas de ahorro{% endif %}</h2>
+  <div class="dos">
+    {% if d.me_deben %}<div>
+      <table>
+        <thead><tr><th>Persona</th><th class="der">Prestado</th><th class="der">Te ha pagado</th><th class="der">Pendiente</th></tr></thead>
+        <tbody>{% for p in d.me_deben %}
+          <tr><td>{{ p.persona }}</td><td class="der">{{ p.valor|cop }}</td><td class="der">{{ p.abonado|cop }}</td><td class="der"><strong>{{ p.pendiente|cop }}</strong></td></tr>
+        {% endfor %}</tbody>
+      </table>
+    </div>{% endif %}
+    {% if d.metas %}<div>
+      <table>
+        <thead><tr><th>Meta</th><th class="der">Ahorrado</th><th class="der">Objetivo</th><th>Avance</th></tr></thead>
+        <tbody>{% for m in d.metas %}
+          <tr><td>{{ m.nombre }}{% if m.fecha_objetivo %}<div class="peq muted">para el {{ m.fecha_objetivo|fecha }}</div>{% endif %}</td>
+            <td class="der">{{ m.acumulado|cop }}</td><td class="der">{{ m.monto_objetivo|cop if m.monto_objetivo else "—" }}</td>
+            <td>{% if m.avance is not none %}<div class="barrita"><span style="width:{{ [m.avance * 100, 100]|min }}%"></span></div><span class="peq">{{ m.avance|pct }}</span>{% else %}<span class="muted peq">sin objetivo</span>{% endif %}</td></tr>
+        {% endfor %}</tbody>
+      </table>
+    </div>{% endif %}
+  </div>
+</section>
+{% endif %}
+
+<!-- Cómo quedarías con lo programado -->
+{% set cp = d.con_programados %}
+{% if cp %}
+{% set ns.n = ns.n + 1 %}
+<section class="bloque">
+  <h2>{{ ns.n }}. Cómo quedarías con lo programado</h2>
+  <p class="peq" style="margin:0 0 6px">Aquí <strong>sí se suman</strong> los {{ d.programados_cantidad }} movimiento(s) que ya registraste con fecha posterior al {{ d.corte|fecha }}{% if cp.ultima_fecha %} (el último, del {{ cp.ultima_fecha|fecha }}){% endif %}. Solo incluye lo registrado: lo que aún no anotes no aparece.</p>
+  <div class="tiles">
+    <div class="tile"><div class="et">Disponible hoy</div><div class="v {{ 'neg' if d.posicion.disponible < 0 }}">{{ d.posicion.disponible|cop }}</div><div class="n">Al {{ d.corte|fecha }}</div></div>
+    <div class="tile"><div class="et">Programado neto</div><div class="v {{ 'neg' if cp.neto < 0 else 'pos' }}">{{ cp.neto|cop(true) }}</div><div class="n"><span style="white-space:nowrap">+{{ d.programados_total.ingreso|cop }} ingresos</span> · <span style="white-space:nowrap">−{{ d.programados_total.gasto|cop }} gastos</span></div></div>
+    <div class="tile"><div class="et">Apartado como ahorro</div><div class="v">{{ cp.posicion.ahorro_acumulado|cop }}</div><div class="n">{% if d.programados_total.ahorro %}Incluye {{ d.programados_total.ahorro|cop }} programado{% else %}Sin ahorro programado{% endif %}</div></div>
+    <div class="tile dest"><div class="et">Disponible con lo programado</div><div class="v {{ 'neg' if cp.posicion.disponible < 0 }}">{{ cp.posicion.disponible|cop }}</div><div class="n">{{ cp.cambio_disponible|cop(true) }} frente a hoy</div></div>
+  </div>
+  <div class="dos">
+    <div>
+      <h3>Tus cuentas</h3>
+      <table>
+        <thead><tr><th>Cuenta</th><th class="der">Hoy</th><th class="der">Programado</th><th class="der">Quedaría en</th></tr></thead>
+        <tbody>{% for c in cp.cuentas %}
+          <tr><td>{{ c.nombre }}</td><td class="der {{ 'neg' if c.hoy < 0 }}">{{ c.hoy|cop }}</td>
+            <td class="der {{ 'neg' if c.cambio < 0 else ('pos' if c.cambio > 0) }}">{{ c.cambio|cop(true) if c.cambio else "—" }}</td>
+            <td class="der {{ 'neg' if c.final < 0 }}"><strong>{{ c.final|cop }}</strong></td></tr>
+        {% endfor %}
+          <tr class="total"><td>Total</td><td class="der">{{ d.posicion.patrimonio|cop }}</td><td class="der">{{ (cp.posicion.patrimonio - d.posicion.patrimonio)|cop(true) }}</td><td class="der">{{ cp.posicion.patrimonio|cop }}</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div>
+      <h3>¿En qué meses cae?</h3>
+      <table>
+        <thead><tr><th>Mes</th><th class="der">Ingresos</th><th class="der">Gastos</th><th class="der">Neto</th></tr></thead>
+        <tbody>{% for m in cp.por_mes %}
+          <tr><td>{{ m.mes.etiqueta }} <span class="muted peq">({{ m.cantidad }})</span></td><td class="der">{{ m.ingresos|cop }}</td><td class="der">{{ m.gastos|cop }}</td>
+            <td class="der {{ 'neg' if m.neto < 0 else ('pos' if m.neto > 0) }}">{{ m.neto|cop(true) }}</td></tr>
+        {% endfor %}</tbody>
+      </table>
+      {% if cp.mes_completo %}{% set mc = cp.mes_completo %}
+      <p class="nota">{{ d.mes.nombre|capitalize }} completo, con lo programado del mes: ingresos {{ mc.ingresos|cop }}, gastos {{ mc.gastos|cop }}, ahorro {{ mc.ahorro|cop }}, balance <strong class="{{ 'neg' if mc.balance < 0 }}">{{ mc.balance|cop }}</strong>.</p>
+      {% endif %}
+    </div>
+  </div>
+  {% if d.transferencias_programadas %}<p class="peq muted">Los movimientos entre cuentas programados cambian el saldo de cada cuenta, pero no el total.</p>{% endif %}
+</section>
+{% endif %}
+
+<!-- Observaciones -->
+{% if d.observaciones %}
+<section class="bloque">
+  <h2>En resumen</h2>
+  <ul class="obs">
+  {% for o in d.observaciones %}
+    <li class="{{ o.nivel }}"><b>{{ {"alerta": "Atención", "bueno": "Bien", "info": "Dato"}[o.nivel] }}</b>{{ o.texto }}</li>
+  {% endfor %}
+  </ul>
+</section>
+{% endif %}
+
+{% endif %}
+
+<footer>
+  Reporte generado en tu equipo por tu sistema de finanzas personales; ningún dato se envió fuera de él.
+  Las cifras incluyen todo lo registrado hasta el {{ d.corte|fecha }}. Los movimientos con fecha posterior aparecen en «Lo que viene» y no se suman.
+  Lo que no hayas registrado no aparece aquí.
+</footer>
+</div>
+</body>
+</html>

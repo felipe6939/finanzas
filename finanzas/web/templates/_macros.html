@@ -1,0 +1,35 @@
+{% macro opciones_categoria(arbol, seleccionada) %}
+  {% for c in arbol if c.activa %}
+    <optgroup label="{{ c.nombre }}">
+      <option value="{{ c.id }}" {{ 'selected' if seleccionada == c.id }}>{{ c.nombre }} (general)</option>
+      {% for h in c.hijas if h.activa %}
+        <option value="{{ h.id }}" {{ 'selected' if seleccionada == h.id }}>{{ h.nombre }}</option>
+      {% endfor %}
+    </optgroup>
+  {% endfor %}
+{% endmacro %}
+
+{% macro selector_categoria(nombre, tipo, categorias_gasto, categorias_ingreso, seleccionada) %}
+  <select name="{{ nombre }}" data-categorias>
+    <option value="">— Elige una categoría —</option>
+    {% if tipo == 'ingreso' %}{{ opciones_categoria(categorias_ingreso, seleccionada) }}{% else %}{{ opciones_categoria(categorias_gasto, seleccionada) }}{% endif %}
+  </select>
+  <template data-plantilla="gasto">{{ opciones_categoria(categorias_gasto, seleccionada) }}</template>
+  <template data-plantilla="ingreso">{{ opciones_categoria(categorias_ingreso, seleccionada) }}</template>
+{% endmacro %}
+
+{% macro delta(variacion, sube_es_bueno, etiqueta) %}
+  {% if variacion is none %}
+    <span class="muted">sin comparación</span>
+  {% else %}
+    {% set sube = variacion > 0 %}
+    {% set clase = ('sube-' if sube else 'baja-') ~ ('bien' if (sube == sube_es_bueno) else 'mal') %}
+    {% if variacion|abs < 0.005 %}
+      <span>= igual que {{ etiqueta }}</span>
+    {% else %}
+      <span class="{{ clase }}">{{ '▲' if sube else '▼' }} {{ (variacion|abs)|pct }}</span> vs {{ etiqueta }}
+    {% endif %}
+  {% endif %}
+{% endmacro %}
+
+{% macro chip_tipo(tipo) %}<span class="chip {{ tipo }}">{{ {'gasto': 'Gasto', 'ingreso': 'Ingreso', 'ahorro': 'Ahorro'}[tipo] }}</span>{% endmacro %}

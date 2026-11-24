@@ -1,0 +1,14 @@
+# Datos financieros reales: NUNCA al control de versiones
+data/
+informes/
+*.db
+*.db-journal
+
+# Entorno
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Archivos temporales de Office
+~$*

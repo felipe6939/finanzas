@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+{% from "_macros.html" import delta, chip_tipo %}
+{% block titulo %}Inicio{% endblock %}
+{% block contenido %}
+{% set comp = k.periodo_comparacion.etiqueta if k.parcial else mes.anterior().nombre %}
+<div class="cabecera">
+  <div>
+    <h1>{{ mes.etiqueta }}</h1>
+    <div class="sub">
+      {% if k.parcial %}Mes en curso · datos hasta el {{ hoy|fecha }}{% if k.hay_programado %} y programados hasta el {{ k.periodo.hasta|fecha }}{% endif %}{% if mes_inicio < mes %} · comparado con el mismo periodo de {{ mes.anterior().nombre }}{% else %} · primer mes del sistema{% endif %}
+      {% else %}Mes cerrado{% if mes_inicio < mes %} · comparado con {{ mes.anterior().etiqueta }}{% else %} · primer mes del sistema{% endif %}{% endif %}
+    </div>
+  </div>
+  <div class="acciones-cabecera">
+  <div class="reporte-botones">
+    <a class="btn" href="/reporte" title="Ver el reporte antes de descargarlo">Ver reporte</a>
+    <a class="btn primario" href="/reporte.pdf" title="Reporte con tus cifras hasta hoy">Descargar reporte PDF</a>
+  </div>
+  <div class="selector-mes">
+    {% if mes_inicio < mes %}<a href="/?mes={{ mes.anterior().clave }}" aria-label="Mes anterior">‹</a>{% else %}<span class="nav-off" aria-hidden="true">‹</span>{% endif %}
+    <strong>{{ mes.etiqueta }}</strong>
+    <a href="/?mes={{ mes.siguiente().clave }}" aria-label="Mes siguiente">›</a>
+    {% if not mes.contiene(hoy) %}<a href="/">Hoy</a>{% endif %}
+  </div>
+  </div>
+</div>
+
+<section class="tarjeta" style="margin-bottom:16px">
+  <form class="rapido" method="post" action="/movimientos/rapido">
+    <input type="hidden" name="volver" value="/?mes={{ mes.clave }}">
+    <input type="text" name="texto" placeholder="Registro rápido: 45.000 almuerzo  ·  +3.200.000 salario bbva  ·  ahorro 300k" autocomplete="off" autofocus data-etiquetas>
+    <input type="date" name="fecha" value="{{ hoy.isoformat() }}" min="{{ inicio_sistema.isoformat() }}">
+    <button class="btn primario">Registrar</button>
+  </form>
+  <div class="ayuda-rapido">Sin signo = gasto · <code>+</code> ingreso · <code>ahorro</code> · cuenta opcional (<code>nequi</code>, <code>bancolombia</code>, <code>bbva</code>, <code>efectivo</code>) · <code>#categoría</code> (escribe <code>#</code> y te muestro la lista) · <code>(nota)</code>. Si falta algo, te muestro el formulario.</div>
+</section>
+
+{% if not hay_movimientos %}
+  <section class="tarjeta"><div class="vacio">
+    <strong>Todavía no hay movimientos</strong>
+    Registra el primero arriba, <a href="/importar">importa tu archivo diario</a> o revisa el <a href="/configuracion">punto de partida</a> (saldos iniciales).
+  </div></section>
+{% else %}
+
+<div class="rejilla r-kpi" style="margin-bottom:16px">
+  <div class="tarjeta kpi">
+    <div class="etiqueta">Ingresos</div>
+    <div class="valor">{{ k.actual.ingresos|cop }}</div>
+    <div class="delta">{{ delta(k.variacion.ingresos, true, comp) }}</div>
+  </div>
+  <div class="tarjeta kpi">
+    <div class="etiqueta">Gastos</div>
+    <div class="valor">{{ k.actual.gastos|cop }}</div>
+    <div class="delta">{{ delta(k.variacion.gastos, false, comp) }}</div>
+  </div>
+  <div class="tarjeta kpi">
+    <div class="etiqueta">Balance (ingresos − gastos)</div>
+    <div class="valor" style="color: {{ 'var(--mal-texto)' if k.actual.balance < 0 else 'inherit' }}">{{ k.actual.balance|cop(true) }}</div>
+    <div class="delta">Sin destinar: {{ k.actual.sobrante|cop }}</div>
+  </div>
+  <div class="tarjeta kpi">
+    <div class="etiqueta">Ahorro del mes</div>
+    <div class="valor">{{ k.actual.ahorro|cop }}</div>
+    <div class="delta">{% if k.actual.tasa_ahorro is not none %}{{ k.actual.tasa_ahorro|pct }} de tus ingresos{% else %}<span class="muted">sin ingresos registrados</span>{% endif %}</div>
+  </div>
+  <div class="tarjeta kpi destacado">
+    <div class="etiqueta">Disponible {{ ('con lo registrado' if k.hay_programado else 'hoy') if k.parcial or k.hay_programado else 'al cierre' }}</div>
+    <div class="valor">{{ k.posicion.disponible|cop }}</div>
+    <div class="delta">{% if k.hay_programado %}Incluye programados: {% if k.programado.ingreso %}<span class="num">+{{ k.programado.ingreso|cop }}</span> {% endif %}{% if k.programado.gasto %}<span class="num">−{{ k.programado.gasto|cop }}</span> {% endif %}{% if k.programado.ahorro %}<span class="num">ahorro {{ k.programado.ahorro|cop }}</span>{% endif %}<br>{% endif %}Ahorro acumulado: {{ k.posicion.ahorro_acumulado|cop }}{% if k.posicion.me_deben %}<br><a href="/configuracion#me-deben">Te deben: {{ k.posicion.me_deben|cop }}</a> (aparte){% endif %}</div>
+  </div>
+</div>
+
+<div class="rejilla r-3-2" style="margin-bottom:16px">
+  <section class="tarjeta">
+    <header><h2>Ingresos, gastos y ahorro por mes</h2><span class="muted">{{ mes_inicio.nombre }} {{ mes_inicio.anio }} – diciembre {{ mes_inicio.anio + 1 }}</span></header>
+    <div id="g-evolucion" class="grafico" role="img" aria-label="Ingresos, gastos y ahorro por mes"></div>
+    <div class="leyenda"><span><i style="background:var(--serie-1)"></i>Ingresos</span><span><i style="background:var(--serie-2)"></i>Gastos</span><span><i style="background:var(--serie-3)"></i>Ahorro</span>{% if k.parcial %}<span class="muted">· {{ mes.etiqueta_corta }} en curso</span>{% endif %}</div>
+  </section>
+  <section class="tarjeta">
+    <header><h2>Gastos por categoría</h2><span class="muted">clic para ver el detalle</span></header>
+    {% if categorias %}
+      <div id="g-categorias" class="grafico" style="height: {{ [categorias|length * 34 + 30, 160]|max }}px" role="img" aria-label="Gastos por categoría"></div>
+    {% else %}<div class="vacio">Sin gastos en este periodo</div>{% endif %}
+  </section>
+</div>
+
+<div class="rejilla r-3-2" style="margin-bottom:16px">
+  <section class="tarjeta">
+    <header><h2>Ritmo de gasto acumulado</h2><span class="muted">día a día</span></header>
+    <div id="g-ritmo" class="grafico" role="img" aria-label="Gasto acumulado por día"></div>
+    <div class="leyenda"><span><i class="linea" style="background:var(--serie-1)"></i>{{ mes.etiqueta }}</span>{% if mes_inicio < mes %}<span><i class="linea" style="background:var(--serie-neutra)"></i>{{ mes.anterior().etiqueta }}</span>{% endif %}</div>
+  </section>
+  <section class="tarjeta">
+    <header><h2>Composición del gasto</h2></header>
+    {% set colores = {'fijo': 'var(--serie-1)', 'variable': 'var(--serie-2)', 'extraordinario': 'var(--serie-3)', 'esencial': 'var(--serie-1)', 'discrecional': 'var(--serie-2)'} %}
+    {% for titulo, dist in [("Fijos, variables y extraordinarios", naturaleza), ("Esenciales y discrecionales", necesidad)] %}
+      <div class="dist">
+        <h3>{{ titulo }}</h3>
+        {% if dist %}
+        <div class="segmentada" role="img" aria-label="{{ titulo }}: {% for d in dist %}{{ d.clave }} {{ d.participacion|pct }} {% endfor %}">
+          {% for d in dist %}
+            <div style="flex: {{ d.total }}; background: {{ colores[d.clave] }}" title="{{ d.clave|capitalize }}: {{ d.total|cop }} ({{ d.participacion|pct }})">{% if d.participacion >= 0.12 %}<span>{{ d.participacion|pct }}</span>{% endif %}</div>
+          {% endfor %}
+        </div>
+        <div class="leyenda">{% for d in dist %}<span><i style="background: {{ colores[d.clave] }}"></i>{{ d.clave|capitalize }} · <span class="num">{{ d.total|cop }}</span></span>{% endfor %}</div>
+        {% else %}<div class="muted pequeno">Sin gastos</div>{% endif %}
+      </div>
+    {% endfor %}
+  </section>
+</div>
+
+<div class="rejilla r-3-2">
+  <section class="tarjeta">
+    <header><h2>Lo que dicen tus datos</h2><span class="muted">calculado con tus movimientos</span></header>
+    {% if insights %}
+    <ul class="insights">
+      {% for o in insights %}
+        <li class="{{ o.nivel }} {{ 'proy' if o.clase == 'proyeccion' }}">
+          <span class="marca-i">{{ {'bueno': '✓', 'alerta': '!', 'info': 'i'}[o.nivel] }}</span>
+          <div>{% if o.clase == 'proyeccion' %}<span class="etiqueta-proy">Proyección</span>{% endif %}{{ o.texto }}
+            {% if o.metodo %}<div class="muted pequeno">Método: {{ o.metodo }}</div>{% endif %}</div>
+        </li>
+      {% endfor %}
+    </ul>
+    {% else %}<div class="vacio">Aún no hay suficientes datos para sacar conclusiones.</div>{% endif %}
+  </section>
+  <section class="tarjeta">
+    <header><h2>Últimos movimientos</h2><a href="/movimientos?mes={{ mes.clave }}">Ver todos</a></header>
+    <table>
+      <tbody>
+      {% for m in ultimos %}
+        <tr>
+          <td><a href="/movimientos/{{ m.id }}">{{ m.descripcion }}</a><div class="muted pequeno">{{ m.fecha|fecha_dia }}{% if m.fecha > hoy.isoformat() %} <span class="chip prog">programado</span>{% endif %} · {{ m.categoria or m.meta or 'Ahorro' }}</div></td>
+          <td class="der num v-{{ m.tipo }}">{{ '+' if m.tipo == 'ingreso' }}{{ m.valor|cop }}</td>
+        </tr>
+      {% else %}<tr><td class="muted">Sin movimientos este mes</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </section>
+</div>
+{% endif %}
+{% endblock %}
+{% block scripts %}
+{% if hay_movimientos %}
+<script src="/static/vendor/echarts.min.js"></script>
+<script id="datos" type="application/json">{{ datos_json|safe }}</script>
+<script src="/static/graficos.js?v={{ version }}"></script>
+{% endif %}
+{% endblock %}

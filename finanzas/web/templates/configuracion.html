@@ -1,0 +1,305 @@
+{% extends "base.html" %}
+{% from "_macros.html" import opciones_categoria %}
+{% block titulo %}Configuración{% endblock %}
+{% block contenido %}
+<div class="cabecera"><div><h1>Configuración</h1><div class="sub">Todo es editable. Cada cambio queda registrado en la auditoría.</div></div></div>
+
+<div class="rejilla r-2" style="margin-bottom:16px">
+  <section class="tarjeta">
+    {% if punto_partida_en_ingresos %}
+    <header><h2>Punto de partida y deudas a tu favor</h2><span class="muted">desde el {{ fecha_inicio|fecha }}</span></header>
+    <p class="aviso-pp pequeno" style="margin-top:0">Empezaste con <strong>{{ total_punto_partida|cop }}</strong>, registrados como <a href="/movimientos?mes={{ fecha_inicio.isoformat()[:7] }}&tipo=ingreso">ingresos «Punto de partida»</a> del {{ fecha_inicio|fecha }}. Si un valor está mal, corrígelo en ese movimiento.</p>
+    <form method="post" action="/configuracion/inicio" style="margin-top:14px">
+      <div class="campos">
+        <div><label>Ya ahorrado al empezar</label><input type="text" name="ahorro_inicial" value="{{ ahorro_inicial|miles }}" inputmode="numeric"></div>
+      </div>
+      <p class="muted pequeno">La parte de ese dinero que ya tenías apartada como ahorro: no cuenta como disponible y suma a tu ahorro acumulado. Si no tenías nada apartado, déjalo en 0.</p>
+      <div class="acciones"><button class="btn primario">Guardar</button></div>
+    </form>
+    {% else %}
+    <header><h2>Punto de partida</h2><span class="muted">saldos al iniciar el sistema</span></header>
+    <form method="post" action="/configuracion/inicio">
+      <div class="campos">
+        <div><label>Fecha de inicio</label><input type="date" name="fecha_inicio" value="{{ fecha_inicio.isoformat() }}" required {{ 'disabled' if demo_activo }}></div>
+        {% for c in todas_cuentas %}
+          <div><label>Saldo de {{ c.nombre }}</label><input type="text" name="saldo_{{ c.id }}" value="{{ c.saldo_inicial|miles }}" inputmode="numeric"></div>
+        {% endfor %}
+        <div><label>Ya ahorrado (incluido en los saldos)</label><input type="text" name="ahorro_inicial" value="{{ ahorro_inicial|miles }}" inputmode="numeric"></div>
+      </div>
+      {% if demo_activo %}<input type="hidden" name="fecha_inicio" value="{{ fecha_inicio.isoformat() }}">{% endif %}
+      <p class="muted pequeno">Saldos al comenzar el día de inicio, antes de cualquier movimiento de ese día. «Ya ahorrado» es la parte de esos saldos que ya tienes apartada como ahorro: no cuenta como disponible.</p>
+      <div class="acciones"><button class="btn primario">Guardar punto de partida</button></div>
+    </form>
+    {% endif %}
+
+    <div id="me-deben" class="me-deben">
+      <header><h2>Me deben</h2>
+        {% set pendiente_total = me_deben|sum(attribute='pendiente') %}
+        <span class="muted">{% if pendiente_total %}{{ pendiente_total|cop }} pendiente{% else %}dinero que prestaste{% endif %}</span>
+      </header>
+      {% if me_deben %}
+      <table>
+        <thead><tr><th>Persona</th><th class="der">Pendiente</th><th></th></tr></thead>
+        <tbody>
+        {% for p in me_deben %}
+          <tr class="{{ 'saldada' if p.pendiente == 0 }}">
+            <td><strong>{{ p.persona }}</strong>
+              {% if p.pendiente == 0 %} <span class="chip ok">saldada</span>{% endif %}
+              <div class="muted pequeno">
+                {{ p.valor|cop }}{% if p.inicial %} al iniciar{% else %} prestado el {{ p.fecha|fecha }}{% endif %}{% if p.nota %} · {{ p.nota }}{% endif %}
+                {% for a in p.abonos %}<br>Pagó {{ a.valor|cop }} el {{ a.fecha|fecha }} → {{ a.cuenta }}{% endfor %}
+              </div>
+            </td>
+            <td class="der num">{{ p.pendiente|cop }}</td>
+            <td class="der">
+              {% if p.pendiente > 0 %}<button class="btn peq" type="button" onclick="document.getElementById('abono-{{ p.id }}').showModal()">Recibí un pago</button>{% endif %}
+              {% if p.inicial %}<button class="btn peq" type="button" onclick="document.getElementById('deuda-{{ p.id }}').showModal()">Editar</button>{% endif %}
+
+              <dialog id="abono-{{ p.id }}"><form method="post" action="/configuracion/abono">
+                <h2 style="margin-bottom:4px">Pago de {{ p.persona }}</h2>
+                <p class="muted pequeno" style="margin:0 0 12px">Pendiente: {{ p.pendiente|cop }}. No cuenta como ingreso: el dinero ya era tuyo, solo vuelve a tu cuenta.</p>
+                <input type="hidden" name="prestamo_id" value="{{ p.id }}">
+                <div class="campos">
+                  <div><label>Fecha</label><input type="date" name="fecha" value="{{ hoy.isoformat() }}" min="{{ fecha_inicio.isoformat() }}" max="{{ hoy.isoformat() }}" required></div>
+                  <div><label>Valor recibido</label><input type="text" name="valor" inputmode="numeric" placeholder="{{ p.pendiente|miles }}" required></div>
+                  <div><label>Cuenta donde lo recibiste</label><select name="cuenta_id">{% for c in cuentas %}<option value="{{ c.id }}" {{ 'selected' if c.por_defecto }}>{{ c.nombre }}</option>{% endfor %}</select></div>
+                  <div><label>Nota (opcional)</label><input name="nota"></div>
+                </div>
+                <div class="acciones"><button class="btn primario">Registrar pago</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Cancelar</button></div>
+              </form>
+              {% if p.abonos %}
+                <h3 style="margin-top:16px">Pagos registrados</h3>
+                {% for a in p.abonos %}
+                <form method="post" action="/configuracion/abono-eliminar" class="fila-abono" onsubmit="return confirm('¿Eliminar este pago de {{ a.valor|cop }}?')">
+                  <span>{{ a.fecha|fecha }} · {{ a.valor|cop }} → {{ a.cuenta }}</span>
+                  <input type="hidden" name="id" value="{{ a.id }}"><button class="btn peq">Eliminar</button>
+                </form>
+                {% endfor %}
+              {% endif %}
+              </dialog>
+
+              {% if p.inicial %}
+              <dialog id="deuda-{{ p.id }}"><form method="post" action="/configuracion/deuda">
+                <h2 style="margin-bottom:12px">Editar deuda de {{ p.persona }}</h2>
+                <input type="hidden" name="id" value="{{ p.id }}">
+                <div class="campos">
+                  <div><label>Quién te debe</label><input name="persona" value="{{ p.persona }}" required></div>
+                  <div><label>Valor que te debía al iniciar</label><input type="text" name="valor" value="{{ p.valor|miles }}" inputmode="numeric" required></div>
+                  <div><label>Nota (opcional)</label><input name="nota" value="{{ p.nota or '' }}"></div>
+                </div>
+                <div class="acciones"><button class="btn primario">Guardar</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Cancelar</button></div>
+              </form>
+              {% if not p.abonos %}
+              <form method="post" action="/configuracion/deuda-eliminar" onsubmit="return confirm('¿Eliminar la deuda de {{ p.persona }}?')" style="margin-top:8px">
+                <input type="hidden" name="id" value="{{ p.id }}"><button class="btn peq">Eliminar deuda</button>
+              </form>
+              {% endif %}
+              </dialog>
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      {% endif %}
+      <p class="muted pequeno">Dinero que prestaste y aún no te han devuelto al iniciar. No forma parte de tus saldos ni de tu disponible. Cuando te paguen, usa «Recibí un pago»: el dinero vuelve a la cuenta que elijas y no se cuenta como ingreso.</p>
+      <div class="acciones"><button class="btn" type="button" onclick="document.getElementById('deuda-nueva').showModal()">+ Agregar quién me debe</button></div>
+      <dialog id="deuda-nueva"><form method="post" action="/configuracion/deuda">
+        <h2 style="margin-bottom:12px">Me deben</h2>
+        <div class="campos">
+          <div><label>Quién te debe</label><input name="persona" required></div>
+          <div><label>Valor que te debía al iniciar</label><input type="text" name="valor" inputmode="numeric" placeholder="200.000" required></div>
+          <div><label>Nota (opcional)</label><input name="nota" placeholder="p. ej. préstamo de octubre"></div>
+        </div>
+        <div class="acciones"><button class="btn primario">Guardar</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Cancelar</button></div>
+      </form></dialog>
+    </div>
+  </section>
+
+  <section class="tarjeta">
+    <header><h2>Cuentas</h2><span class="muted">las palabras clave se reconocen al importar</span></header>
+    <table>
+      <thead><tr><th>Cuenta</th><th>Palabras clave</th><th></th></tr></thead>
+      <tbody>
+      {% for c in todas_cuentas %}
+        <tr class="{{ 'inactiva' if not c.activa }}">
+          <td><strong>{{ c.nombre }}</strong> <span class="muted pequeno">{{ c.tipo }}</span>{% if c.por_defecto %} <span class="chip ok">por defecto</span>{% endif %}</td>
+          <td class="sec">{{ c.alias|replace(',', ', ') }}</td>
+          <td class="der">
+            <button class="btn peq" type="button" onclick="document.getElementById('cuenta-{{ c.id }}').showModal()">Editar</button>
+            {% if not c.por_defecto and c.activa %}<form method="post" action="/configuracion/defecto" style="display:inline"><input type="hidden" name="id" value="{{ c.id }}"><button class="btn peq">Usar por defecto</button></form>{% endif %}
+            <dialog id="cuenta-{{ c.id }}"><form method="post" action="/configuracion/cuenta">
+              <h2 style="margin-bottom:12px">Editar {{ c.nombre }}</h2>
+              <input type="hidden" name="id" value="{{ c.id }}">
+              <div class="campos">
+                <div><label>Nombre</label><input name="nombre" value="{{ c.nombre }}" required></div>
+                <div><label>Tipo</label><select name="tipo">{% for t in ['banco','billetera','efectivo'] %}<option {{ 'selected' if c.tipo == t }}>{{ t }}</option>{% endfor %}</select></div>
+                <div class="campo-ancho"><label>Palabras clave (separadas por coma)</label><input name="alias" value="{{ c.alias }}"></div>
+                <div><label>Estado</label><select name="activa"><option value="1">Activa</option><option value="0" {{ 'selected' if not c.activa }}>Inactiva</option></select></div>
+              </div>
+              <div class="acciones"><button class="btn primario">Guardar</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Cancelar</button></div>
+            </form></dialog>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <details style="margin-top:12px"><summary class="sec" style="cursor:pointer">Agregar cuenta</summary>
+      <form method="post" action="/configuracion/cuenta" class="form-linea" style="margin-top:10px">
+        <div><label>Nombre</label><input name="nombre" required></div>
+        <div><label>Tipo</label><select name="tipo"><option>banco</option><option>billetera</option><option>efectivo</option></select></div>
+        <div><label>Palabras clave</label><input name="alias" placeholder="daviplata"></div>
+        {% if not punto_partida_en_ingresos %}<div><label>Saldo inicial</label><input name="saldo_inicial" inputmode="numeric" placeholder="0"></div>{% endif %}
+        <button class="btn primario">Agregar</button>
+      </form>
+    </details>
+  </section>
+</div>
+
+<div class="rejilla r-2" style="margin-bottom:16px">
+  {% for titulo, tipo, arbol in [("Categorías de gasto", "gasto", arbol_gasto), ("Categorías de ingreso", "ingreso", arbol_ingreso)] %}
+  <section class="tarjeta">
+    <header><h2>{{ titulo }}</h2><span class="muted">naturaleza{{ ' · necesidad' if tipo == 'gasto' }} por defecto</span></header>
+    <ul class="arbol">
+      {% for c in arbol %}
+        <li class="{{ 'inactiva' if not c.activa }}">
+          <a href="#" onclick="document.getElementById('cat-{{ c.id }}').showModal(); return false"><strong>{{ c.nombre }}</strong></a>
+          <span class="muted pequeno">{{ c.naturaleza or '' }}{{ ' · ' ~ c.necesidad if c.necesidad }}</span>
+          <ul>{% for h in c.hijas %}<li><a href="#" class="chip {{ 'inactiva' if not h.activa }}" onclick="document.getElementById('cat-{{ h.id }}').showModal(); return false">{{ h.nombre }}</a></li>{% endfor %}</ul>
+        </li>
+      {% endfor %}
+    </ul>
+    {% for c in arbol %}{% for x in [c] + c.hijas %}
+      <dialog id="cat-{{ x.id }}"><form method="post" action="/configuracion/categoria">
+        <h2 style="margin-bottom:12px">{{ x.nombre_completo }}</h2>
+        <input type="hidden" name="id" value="{{ x.id }}"><input type="hidden" name="tipo" value="{{ tipo }}">
+        {% if x.padre_id %}<input type="hidden" name="padre_id" value="{{ x.padre_id }}">{% endif %}
+        <div class="campos">
+          <div class="campo-ancho"><label>Nombre</label><input name="nombre" value="{{ x.nombre }}" required></div>
+          <div><label>Naturaleza</label><select name="naturaleza"><option value="">{{ 'Como la categoría padre' if x.padre_id else '—' }}</option>{% for n in ['fijo','variable','extraordinario'] %}<option value="{{ n }}" {{ 'selected' if x.naturaleza == n }}>{{ n|capitalize }}</option>{% endfor %}</select></div>
+          {% if tipo == 'gasto' %}<div><label>Necesidad</label><select name="necesidad"><option value="">{{ 'Como la categoría padre' if x.padre_id else '—' }}</option>{% for n in ['esencial','discrecional'] %}<option value="{{ n }}" {{ 'selected' if x.necesidad == n }}>{{ n|capitalize }}</option>{% endfor %}</select></div>{% endif %}
+          <div><label>Estado</label><select name="activa"><option value="1">Activa</option><option value="0" {{ 'selected' if not x.activa }}>Inactiva</option></select></div>
+        </div>
+        <p class="muted pequeno">Cambiar la naturaleza o la necesidad por defecto no modifica los movimientos ya registrados.</p>
+        <div class="acciones"><button class="btn primario">Guardar</button><button class="btn" type="button" onclick="this.closest('dialog').close()">Cancelar</button></div>
+      </form></dialog>
+    {% endfor %}{% endfor %}
+    <details style="margin-top:12px"><summary class="sec" style="cursor:pointer">Agregar categoría o subcategoría</summary>
+      <form method="post" action="/configuracion/categoria" style="margin-top:10px">
+        <input type="hidden" name="tipo" value="{{ tipo }}">
+        <div class="campos">
+          <div><label>Nombre</label><input name="nombre" required></div>
+          <div><label>Dentro de</label><select name="padre_id"><option value="">(categoría principal)</option>{% for c in arbol if c.activa %}<option value="{{ c.id }}">{{ c.nombre }}</option>{% endfor %}</select></div>
+          <div><label>Naturaleza</label><select name="naturaleza"><option value="">—</option>{% for n in ['fijo','variable','extraordinario'] %}<option value="{{ n }}">{{ n|capitalize }}</option>{% endfor %}</select></div>
+          {% if tipo == 'gasto' %}<div><label>Necesidad</label><select name="necesidad"><option value="">—</option>{% for n in ['esencial','discrecional'] %}<option value="{{ n }}">{{ n|capitalize }}</option>{% endfor %}</select></div>{% endif %}
+        </div>
+        <div class="acciones"><button class="btn primario">Agregar</button></div>
+      </form>
+    </details>
+  </section>
+  {% endfor %}
+</div>
+
+<div class="rejilla r-2" style="margin-bottom:16px">
+  <section class="tarjeta">
+    <header><h2>Metas de ahorro</h2><span class="muted">escribe su nombre en la línea de ahorro</span></header>
+    <table><tbody>
+      {% for m in todas_metas %}
+        <tr class="{{ 'inactiva' if not m.activa }}"><td><strong>{{ m.nombre }}</strong>{% if m.fecha_objetivo %}<div class="muted pequeno">para el {{ m.fecha_objetivo|fecha }}</div>{% endif %}</td>
+          <td class="der num">{{ m.acumulado|cop }}{% if m.monto_objetivo %} <span class="muted">de {{ m.monto_objetivo|cop }} ({{ (m.acumulado / m.monto_objetivo)|pct }})</span>{% endif %}</td></tr>
+      {% else %}<tr><td class="muted">Sin metas. Los ahorros se registran como «ahorro general».</td></tr>{% endfor %}
+    </tbody></table>
+    <form method="post" action="/configuracion/meta" class="form-linea" style="margin-top:12px">
+      <div><label>Nueva meta</label><input name="nombre" placeholder="Viaje" required></div>
+      <div><label>Objetivo (opcional)</label><input name="monto_objetivo" inputmode="numeric" placeholder="3.000.000"></div>
+      <div><label>Fecha objetivo</label><input type="date" name="fecha_objetivo"></div>
+      <button class="btn primario">Crear</button>
+    </form>
+  </section>
+
+  <section class="tarjeta">
+    <header><h2>Reglas de clasificación</h2><span class="muted">{{ n_reglas_base }} reglas base + las tuyas</span></header>
+    <p class="sec pequeno" style="margin-top:0">Si la descripción contiene la palabra clave, se propone esa categoría al importar. Las aprendidas al corregir una importación aparecen aquí.</p>
+    <table><tbody>
+      {% for r in reglas %}
+        <tr><td><code>{{ r.patron }}</code></td><td class="sec">{{ r.categoria }}</td>
+          <td class="der"><form method="post" action="/configuracion/regla-eliminar"><input type="hidden" name="id" value="{{ r.id }}"><button class="btn peq peligro">Quitar</button></form></td></tr>
+      {% else %}<tr><td class="muted">Aún no has creado reglas propias.</td></tr>{% endfor %}
+    </tbody></table>
+    <form method="post" action="/configuracion/regla" class="form-linea" style="margin-top:12px">
+      <div><label>Palabra clave</label><input name="patron" placeholder="corrientazo" required></div>
+      <div><label>Tipo</label><select name="tipo"><option value="gasto">Gasto</option><option value="ingreso">Ingreso</option></select></div>
+      <div><label>Categoría</label><select name="categoria_id" required><optgroup label="── Gastos ──"></optgroup>{{ opciones_categoria(arbol_gasto, none) }}<optgroup label="── Ingresos ──"></optgroup>{{ opciones_categoria(arbol_ingreso, none) }}</select></div>
+      <button class="btn primario">Agregar</button>
+    </form>
+  </section>
+</div>
+
+<div class="rejilla r-2">
+  <section class="tarjeta">
+    <header><h2>Respaldos y exportación</h2><span class="muted">{{ ruta_datos }}</span></header>
+    <p class="sec pequeno" style="margin-top:0">Se crea un respaldo automático cada día al abrir la app y antes de cada importación, reversión o cambio de esquema. Se conservan los 30 más recientes y el último de cada mes.</p>
+    <div class="acciones" style="margin-top:0">
+      <form method="post" action="/configuracion/respaldo"><button class="btn">Crear respaldo ahora</button></form>
+      <form method="post" action="/configuracion/exportar"><input type="hidden" name="formato" value="xlsx"><button class="btn">Exportar a Excel</button></form>
+      <form method="post" action="/configuracion/exportar"><input type="hidden" name="formato" value="csv"><button class="btn">Exportar CSV</button></form>
+    </div>
+    <table style="margin-top:12px"><tbody>
+      {% for r in respaldos %}<tr><td class="sec pequeno">{{ r.name }}</td></tr>{% else %}<tr><td class="muted">Sin respaldos todavía.</td></tr>{% endfor %}
+    </tbody></table>
+  </section>
+  <section class="tarjeta">
+    <header><h2>Datos de ejemplo</h2></header>
+    {% if demo_activo %}
+      <p class="sec" style="margin-top:0">Hay datos de ejemplo (ficticios) cargados. Al eliminarlos se restauran la fecha de inicio y los saldos que tenías.</p>
+      <form method="post" action="/configuracion/demo-eliminar" onsubmit="return confirm('¿Eliminar todos los datos de ejemplo?')"><button class="btn peligro">Eliminar datos de ejemplo</button></form>
+    {% else %}
+      <p class="sec" style="margin-top:0">Carga unos meses de movimientos ficticios para explorar el dashboard. Solo es posible si aún no hay movimientos reales.</p>
+      <form method="post" action="/configuracion/demo-cargar"><button class="btn">Cargar datos de ejemplo</button></form>
+    {% endif %}
+  </section>
+</div>
+<section class="tarjeta" id="acceso-iphone" style="margin-top:16px">
+  <header><h2>Acceso desde el iPhone</h2><span class="muted">por la red privada de Tailscale</span></header>
+  {% if es_remoto %}
+    <p class="sec" style="margin-top:0">Estás conectado desde otro dispositivo. La clave y la activación del acceso solo se cambian desde el computador.</p>
+  {% else %}
+  <p class="sec pequeno" style="margin-top:0">Abre esta app desde tu iPhone, en cualquier lugar, sin publicarla en internet: solo tus dispositivos conectados a tu cuenta de Tailscale pueden llegar a ella, y además piden esta clave. Desde este computador no se pide clave. Guía completa: <code>docs/acceso-iphone.md</code>.</p>
+  <div class="rejilla r-2" style="gap:20px">
+    <div>
+      <h3 style="margin:0 0 8px">1. Estado</h3>
+      <table><tbody>
+        <tr><td>Tailscale en este computador</td><td class="der">{% if tailscale.ip %}<span class="chip ok">conectado · {{ tailscale.ip }}</span>{% elif tailscale.instalado %}<span class="chip">instalado, sin conectar</span>{% else %}<span class="chip">no instalado</span>{% endif %}</td></tr>
+        <tr><td>Clave de acceso</td><td class="der">{% if acceso_tiene_clave %}<span class="chip ok">creada</span>{% else %}<span class="chip">falta crearla</span>{% endif %}</td></tr>
+        <tr><td>Acceso desde el iPhone</td><td class="der">{% if acceso_remoto %}<span class="chip ok">activado</span>{% else %}<span class="chip">desactivado</span>{% endif %}</td></tr>
+        <tr><td>La app escucha en Tailscale</td><td class="der">{% if acceso_url %}<span class="chip ok">sí</span>{% elif acceso_remoto %}<span class="chip">reinicia la app</span>{% else %}<span class="chip">no</span>{% endif %}</td></tr>
+      </tbody></table>
+      {% if acceso_remoto and tailscale.ip %}
+        <p class="aviso-pp">En el iPhone abre en Safari:<br>
+          <strong>http://{{ tailscale.nombre or tailscale.ip }}:{{ puerto }}</strong>
+          {% if tailscale.nombre %}<br><span class="muted pequeno">o http://{{ tailscale.ip }}:{{ puerto }}</span>{% endif %}</p>
+      {% endif %}
+      <div class="acciones">
+        {% if acceso_remoto %}
+          <form method="post" action="/configuracion/acceso-desactivar" onsubmit="return confirm('¿Desactivar el acceso desde el iPhone? Se cerrarán las sesiones abiertas.')"><button class="btn peligro">Desactivar acceso</button></form>
+        {% else %}
+          <form method="post" action="/configuracion/acceso-activar"><button class="btn primario" {{ 'disabled' if not acceso_tiene_clave }}>Activar acceso desde el iPhone</button></form>
+        {% endif %}
+      </div>
+    </div>
+    <div>
+      <h3 style="margin:0 0 8px">2. {{ "Cambiar la clave" if acceso_tiene_clave else "Crear la clave de acceso" }}</h3>
+      <form method="post" action="/configuracion/acceso-clave">
+        <div class="campos">
+          {% if acceso_tiene_clave %}<div style="grid-column:1/-1"><label>Clave actual</label><input type="password" name="actual" autocomplete="current-password" required></div>{% endif %}
+          <div><label>Clave nueva</label><input type="password" name="nueva" autocomplete="new-password" minlength="6" required></div>
+          <div><label>Repítela</label><input type="password" name="confirmacion" autocomplete="new-password" minlength="6" required></div>
+        </div>
+        <p class="muted pequeno">Mínimo 6 caracteres; mejor 8 o más, con letras y números. Tras 5 intentos fallidos el dispositivo se bloquea 15 minutos. Si la cambias, se cierran las sesiones abiertas en el iPhone.</p>
+        <div class="acciones"><button class="btn">Guardar clave</button></div>
+      </form>
+    </div>
+  </div>
+  {% endif %}
+</section>
+{% endblock %}

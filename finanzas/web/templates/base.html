@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Finanzas">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="theme-color" content="#2a78d6">
+  <link rel="apple-touch-icon" href="/static/icono-180.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <title>{% block titulo %}Finanzas{% endblock %} · Finanzas personales</title>
+  <link rel="stylesheet" href="/static/app.css?v={{ version }}">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%232a78d6'/%3E%3Ctext x='16' y='22' font-size='17' font-family='Segoe UI,sans-serif' font-weight='700' text-anchor='middle' fill='white'%3E$%3C/text%3E%3C/svg%3E">
+</head>
+<body>
+<div class="app">
+  <aside class="lateral">
+    <div class="marca"><div class="logo">$</div><span>Finanzas</span></div>
+    <nav class="nav">
+      {% set enlaces = [
+        ("/", "Inicio", "M3 12l9-8 9 8M5 10v10h5v-6h4v6h5V10"),
+        ("/movimientos", "Movimientos", "M4 6h16M4 12h16M4 18h10"),
+        ("/cuentas", "Cuentas", "M3 7h18v12H3zM3 11h18M7 15h3"),
+        ("/importar", "Importar", "M12 3v12m0 0l-4-4m4 4l4-4M4 17v3h16v-3"),
+        ("/configuracion", "Configuración", "M12 15a3 3 0 100-6 3 3 0 000 6zm7.4-3a7.4 7.4 0 00-.1-1.3l2-1.6-2-3.4-2.4 1a7.6 7.6 0 00-2.2-1.3L14.3 2h-4l-.4 2.4a7.6 7.6 0 00-2.2 1.3l-2.4-1-2 3.4 2 1.6a7.4 7.4 0 000 2.6l-2 1.6 2 3.4 2.4-1c.7.6 1.4 1 2.2 1.3l.4 2.4h4l.4-2.4c.8-.3 1.5-.7 2.2-1.3l2.4 1 2-3.4-2-1.6c.1-.4.1-.9.1-1.3z"),
+      ] %}
+      {% for href, nombre, icono in enlaces %}
+        {% set activo = (href == "/" and ruta == "/") or (href != "/" and ruta.startswith(href)) %}
+        <a href="{{ href }}" class="{{ 'activo' if activo }}" title="{{ nombre }}" aria-label="{{ nombre }}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="{{ icono }}"/></svg>
+          <span>{{ nombre }}</span>
+        </a>
+      {% endfor %}
+    </nav>
+    <div class="pie">Datos locales · v{{ version }}{% if es_remoto %}<form method="post" action="/salir" class="salir"><button class="btn peq">Salir</button></form>{% endif %}</div>
+  </aside>
+  <main class="contenido">
+    {% if demo_activo %}
+      <div class="banda aviso"><span class="icono">!</span>
+        <div><strong>Estás viendo datos de ejemplo (ficticios).</strong> Sirven para probar el sistema; elimínalos antes de registrar tus datos reales.</div>
+        <form method="post" action="/configuracion/demo-eliminar" onsubmit="return confirm('¿Eliminar todos los datos de ejemplo?')"><button class="btn peq">Eliminar ejemplo</button></form>
+      </div>
+    {% endif %}
+    {% if ok %}<div class="banda ok"><span class="icono">✓</span><div>{{ ok }}</div></div>{% endif %}
+    {% if error %}<div class="banda error"><span class="icono">!</span><div>{{ error }}</div></div>{% endif %}
+    {% block contenido %}{% endblock %}
+  </main>
+</div>
+<script id="etiquetas-categorias" type="application/json">{{ etiquetas_json|safe }}</script>
+<script src="/static/etiquetas.js?v={{ version }}"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

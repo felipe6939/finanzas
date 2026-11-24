@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% from "_macros.html" import selector_categoria, chip_tipo %}
+{% block titulo %}Lote #{{ r.lote.id }}{% endblock %}
+{% block contenido %}
+{% set lote = r.lote %}
+{% set borrador = lote.estado == 'borrador' %}
+{% set nombres_estado = {'revisar': 'Por revisar', 'lista': 'Listas', 'ya_importada': 'Ya importadas', 'importada': 'Importadas', 'ignorada': 'Ignoradas', 'descartada': 'Descartadas'} %}
+<div class="cabecera">
+  <div><h1>Importación #{{ lote.id }}</h1>
+    <div class="sub">{{ lote.archivo_nombre }} · {{ lote.creado_en[:16] }} · <strong>{{ lote.estado|capitalize }}</strong>
+      {% if lote.confirmado_en %} el {{ lote.confirmado_en[:16] }}{% endif %}{% if lote.revertido_en %} · revertido el {{ lote.revertido_en[:16] }}{% endif %}</div></div>
+  <a class="btn" href="/importar">Volver</a>
+</div>
+
+<div class="contadores">
+  <a href="?ver=" class="{{ 'activo' if not filtro }}">Todas ({{ r.lineas|length }})</a>
+  {% for e, n in r.conteo.items() if n %}
+    <a href="?ver={{ e }}" class="{{ 'activo' if filtro == e }}">{{ nombres_estado[e] }} ({{ n }})</a>
+  {% endfor %}
+</div>
+
+{% if borrador and r.conteo.revisar %}
+  <div class="banda aviso"><span class="icono">?</span><div>Hay <strong>{{ r.conteo.revisar }}</strong> líneas que necesitan tu decisión. Corrige los datos, acepta el aviso o descarta la línea. No adivino datos que no están en el texto.</div>
+  {% if r.lineas|selectattr('estado', 'equalto', 'revisar')|selectattr('problemas')|list|length %}
+    <form method="post" action="/importar/{{ lote.id }}/aceptar-avisos" onsubmit="return confirm('¿Aceptar todos los avisos? Las líneas con errores seguirán pendientes.')"><button class="btn peq">Aceptar todos los avisos</button></form>
+  {% endif %}</div>
+{% endif %}
+
+{% for l in lineas %}
+  {% set con_error = l.problemas|selectattr('nivel', 'equalto', 'error')|list|length > 0 %}
+  <div class="linea-imp {{ l.estado }} {{ 'con-error' if con_error }} {{ 'tenue' if l.estado in ['ignorada', 'descartada', 'ya_importada'] }}" id="l{{ l.num_linea }}">
+    <div style="display:flex; gap:10px; align-items:baseline; justify-content:space-between; flex-wrap:wrap">
+      <div class="original">L{{ l.num_linea }} · {{ l.texto }}</div>
+      <span class="chip {{ {'lista':'ok','importada':'ok','revisar':'mal' if con_error else 'av'}.get(l.estado, '') }}">{{ nombres_estado[l.estado] }}</span>
+    </div>
+    {% if l.estado not in ['ignorada'] %}
+    <div class="interp">
+      {% if l.tipo %}{{ chip_tipo(l.tipo) }}{% endif %}
+      <span class="num">{{ l.fecha|fecha if l.fecha else '¿fecha?' }}</span>
+      <strong class="num">{{ l.valor|cop if l.valor is not none else '¿valor?' }}</strong>
+      <span>{{ l.descripcion or '¿descripción?' }}</span>
+      <span class="sec">{{ l.cuenta or '¿cuenta?' }}{% if l.origen_campos.cuenta == 'defecto' %} <span class="origen-campo">(por defecto)</span>{% endif %}</span>
+      <span class="sec">{% if l.tipo == 'ahorro' %}{{ l.meta or 'Ahorro general' }}{% else %}{{ l.categoria_completa or '¿categoría?' }}{% if l.origen_campos.categoria == 'regla' %} <span class="origen-campo">(sugerida)</span>{% elif l.origen_campos.categoria == 'manual' %} <span class="origen-campo">(elegida por ti)</span>{% endif %}{% endif %}</span>
+      {% if l.observaciones %}<span class="muted">({{ l.observaciones }})</span>{% endif %}
+      {% if l.movimiento_id %}<a class="pequeno" href="/movimientos/{{ l.movimiento_id }}">mov. #{{ l.movimiento_id }}</a>{% endif %}
+    </div>
+    {% else %}<div class="muted pequeno" style="margin-top:4px">Sin valor: se ignora (parece un título o una línea incompleta).{% if borrador %} Si era un movimiento, edítala abajo.{% endif %}</div>{% endif %}
+
+    {% if l.problemas or (l.notas and l.estado == 'revisar') %}
+    <ul class="problemas">
+      {% for p in l.problemas %}<li class="{{ p.nivel }}">{{ '✕' if p.nivel == 'error' else '⚠' }} {{ p.texto }}</li>{% endfor %}
+      {% for n in l.notas %}<li class="nota">ℹ {{ n }}</li>{% endfor %}
+    </ul>
+    {% endif %}
+
+    {% if borrador and l.estado != 'ya_importada' %}
+      <div class="acciones" style="margin-top:8px">
+        {% if l.estado == 'revisar' and l.problemas and not con_error %}
+          <form method="post" action="/importar/{{ lote.id }}/linea/{{ l.num_linea }}"><input type="hidden" name="ver" value="{{ filtro }}"><input type="hidden" name="accion" value="aceptar"><button class="btn peq">Aceptar e importar</button></form>
+        {% endif %}
+        {% if l.estado == 'descartada' %}
+          <form method="post" action="/importar/{{ lote.id }}/linea/{{ l.num_linea }}"><input type="hidden" name="ver" value="{{ filtro }}"><input type="hidden" name="accion" value="incluir"><button class="btn peq">Volver a incluir</button></form>
+        {% elif l.estado != 'ignorada' %}
+          <form method="post" action="/importar/{{ lote.id }}/linea/{{ l.num_linea }}"><input type="hidden" name="ver" value="{{ filtro }}"><input type="hidden" name="accion" value="descartar"><button class="btn peq">No importar</button></form>
+        {% endif %}
+      </div>
+      {% if l.estado != 'descartada' %}
+      <details {{ 'open' if l.estado == 'revisar' and con_error }}>
+        <summary>Editar datos</summary>
+        <form class="editar" method="post" action="/importar/{{ lote.id }}/linea/{{ l.num_linea }}">
+          <input type="hidden" name="ver" value="{{ filtro }}">
+          <div class="campos">
+            <div><label>Tipo</label><select name="tipo">{% for t, n in [('gasto','Gasto'),('ingreso','Ingreso'),('ahorro','Ahorro')] %}<option value="{{ t }}" {{ 'selected' if (l.tipo or 'gasto') == t }}>{{ n }}</option>{% endfor %}</select></div>
+            <div><label>Fecha</label><input type="date" name="fecha" value="{{ l.fecha or '' }}"></div>
+            <div><label>Valor</label><input type="text" name="valor" value="{{ l.valor|miles if l.valor is not none else '' }}" inputmode="numeric" placeholder="45.000"></div>
+            <div><label>Descripción</label><input type="text" name="descripcion" value="{{ l.descripcion or '' }}"></div>
+            <div><label>Cuenta</label><select name="cuenta_id"><option value="">—</option>{% for c in cuentas %}<option value="{{ c.id }}" {{ 'selected' if l.cuenta_id == c.id }}>{{ c.nombre }}</option>{% endfor %}</select></div>
+            <div data-solo="gasto ingreso"><label>Categoría</label>{{ selector_categoria('categoria_id', l.tipo or 'gasto', categorias_gasto, categorias_ingreso, l.categoria_id) }}</div>
+            <div data-solo="ahorro"><label>Meta</label><select name="meta_id"><option value="">Ahorro general</option>{% for m in metas %}<option value="{{ m.id }}" {{ 'selected' if l.meta_id == m.id }}>{{ m.nombre }}</option>{% endfor %}</select></div>
+            <div><label>Observaciones</label><input type="text" name="observaciones" value="{{ l.observaciones }}"></div>
+            <div data-solo="gasto ingreso"><label>Recordar palabra para esta categoría</label><input type="text" name="recordar" value="{{ l.recordar_patron or '' }}" placeholder="p. ej. {{ l.sugerencia_patron or 'corrientazo' }}"></div>
+          </div>
+          <div class="acciones">
+            <button class="btn primario peq">Guardar</button>
+            {% if l.problemas and not con_error %}<label style="display:inline-flex;gap:6px;align-items:center;margin:0"><input type="checkbox" name="aceptar" value="1" style="width:auto"> y aceptar los avisos</label>{% endif %}
+          </div>
+        </form>
+      </details>
+      {% endif %}
+    {% endif %}
+  </div>
+{% else %}
+  <div class="vacio">No hay líneas en este filtro.</div>
+{% endfor %}
+
+<div class="barra-confirmar">
+  <div class="resumen">
+    {% if borrador %}
+      Se importarán <strong>{{ r.conteo.lista }}</strong> movimientos: gastos <strong class="num">{{ r.totales.gasto|cop }}</strong> · ingresos <strong class="num">{{ r.totales.ingreso|cop }}</strong> · ahorro <strong class="num">{{ r.totales.ahorro|cop }}</strong>.
+      {% if r.conteo.ya_importada %}<span class="muted">{{ r.conteo.ya_importada }} líneas ya estaban registradas y se omiten.</span>{% endif %}
+    {% elif lote.estado == 'confirmado' %}
+      Se importaron <strong>{{ r.conteo.importada }}</strong> movimientos: gastos <strong class="num">{{ r.totales.gasto|cop }}</strong> · ingresos <strong class="num">{{ r.totales.ingreso|cop }}</strong> · ahorro <strong class="num">{{ r.totales.ahorro|cop }}</strong>.
+    {% else %}Este lote está {{ lote.estado }}.{% endif %}
+  </div>
+  {% if borrador %}
+    <form method="post" action="/importar/{{ lote.id }}/descartar" onsubmit="return confirm('¿Descartar este lote? No se registrará nada.')"><button class="btn">Descartar lote</button></form>
+    <form method="post" action="/importar/{{ lote.id }}/confirmar"><button class="btn primario" {{ 'disabled' if not r.puede_confirmar }} title="{{ 'Resuelve las líneas por revisar' if r.conteo.revisar }}">Confirmar importación</button></form>
+  {% elif lote.estado == 'confirmado' %}
+    <a class="btn" href="/movimientos?lote={{ lote.id }}">Ver movimientos</a>
+    <form method="post" action="/importar/{{ lote.id }}/revertir" onsubmit="return confirm('¿Revertir este lote? Sus movimientos se eliminarán (se conservan en el historial) y podrás volver a importar el archivo.')"><button class="btn peligro">Revertir importación</button></form>
+  {% endif %}
+</div>
+{% endblock %}
+{% block scripts %}<script src="/static/formulario.js?v={{ version }}"></script>{% endblock %}

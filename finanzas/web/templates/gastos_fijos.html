@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% from "_macros.html" import opciones_categoria %}
+{% block titulo %}Gastos fijos mensuales{% endblock %}
+{% block contenido %}
+<div class="cabecera">
+  <div>
+    <h1>Gastos fijos mensuales</h1>
+    <div class="sub">Marca la casilla cuando pagues: se registra hoy en su categoría y cuenta. Una vez por mes.</div>
+  </div>
+  <nav class="segmento" aria-label="Submódulos de movimientos">
+    <a href="/movimientos">Movimientos</a>
+    <a href="/movimientos/fijos" class="activo" aria-current="page">Gastos fijos mensuales</a>
+  </nav>
+</div>
+
+<div class="rejilla r-kpi r-kpi-2" style="margin-bottom:16px">
+  <div class="tarjeta kpi">
+    <div class="etiqueta">Total de gastos fijos al mes</div>
+    <div class="valor">{{ total|cop }}</div>
+    <div class="delta">{{ fijos|length }} gasto{{ 's' if fijos|length != 1 }} fijo{{ 's' if fijos|length != 1 }}</div>
+  </div>
+  <div class="tarjeta kpi">
+    <div class="etiqueta">Registrado en {{ mes.nombre }}</div>
+    <div class="valor">{{ registrado|cop }}</div>
+    <div class="delta">{% if fijos and not pendientes %}Todos registrados este mes{% else %}{{ pendientes }} pendiente{{ 's' if pendientes != 1 }} por registrar{% endif %}</div>
+  </div>
+</div>
+
+<section class="tarjeta" style="margin-bottom:16px">
+  <div class="tabla-env">
+  <table class="tabla-fijos">
+    <thead><tr><th>Descripción</th><th class="solo-ancho">Categoría</th><th class="solo-ancho">Cuenta</th><th class="der">Valor</th><th class="solo-ancho">{{ mes.etiqueta }}</th><th class="centro">Registrar</th></tr></thead>
+    <tbody>
+    {% for g in fijos %}
+      {% set r = g.este_mes %}
+      <tr class="{{ 'fijo-hecho' if r }}">
+        <td><strong>{{ g.descripcion }}</strong>
+          <div class="muted pequeno solo-angosto">{{ g.categoria }} · {{ g.cuenta }}{% if r %} · <span class="v-ok">✓ {{ r.fecha|fecha_dia }}</span>{% endif %}</div>
+          <div class="pequeno"><a href="/movimientos/fijos?editar={{ g.id }}#formulario">Editar</a>
+            {% if r %}<form method="post" action="/movimientos/fijos/deshacer" class="en-linea solo-angosto-i"
+                  onsubmit="return confirm('¿Deshacer el registro de este mes? El movimiento se elimina (queda en el historial).')">
+              <input type="hidden" name="id" value="{{ g.id }}"><button class="enlace">· Deshacer</button></form>{% endif %}</div></td>
+        <td class="solo-ancho">{{ g.categoria_padre or g.categoria }}{% if g.categoria_padre %} <span class="muted">› {{ g.categoria }}</span>{% endif %}</td>
+        <td class="solo-ancho">{{ g.cuenta }}</td>
+        <td class="der num"><strong>{{ g.valor|cop }}</strong></td>
+        <td class="pequeno solo-ancho">
+          {% if r %}
+            <a class="chip ok" href="/movimientos/{{ r.movimiento_id }}">✓ Registrado {{ r.fecha|fecha_dia }} · {{ r.cuenta }}</a>
+            <form method="post" action="/movimientos/fijos/deshacer" class="en-linea"
+                  onsubmit="return confirm('¿Deshacer el registro de este mes? El movimiento se elimina (queda en el historial).')">
+              <input type="hidden" name="id" value="{{ g.id }}"><button class="enlace">Deshacer</button>
+            </form>
+          {% else %}<span class="muted">Pendiente</span>{% endif %}
+        </td>
+        <td class="centro">
+          {% if r %}
+            <span class="casilla-pago marcada" role="img" aria-label="{{ g.descripcion }} ya está registrado este mes" title="Ya registrado este mes">✓</span>
+          {% else %}
+            <form method="post" action="/movimientos/fijos/registrar" class="en-linea">
+              <input type="hidden" name="id" value="{{ g.id }}">
+              <button class="casilla-pago" aria-label="Registrar {{ g.descripcion }} {{ g.valor|cop }} hoy" title="Registrar hoy: {{ g.valor|cop }} · {{ g.cuenta }}"></button>
+            </form>
+          {% endif %}
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="6"><div class="vacio"><strong>Sin gastos fijos</strong>Agrega el primero con el formulario de abajo.</div></td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <p class="muted pequeno" style="margin:12px 0 0">
+    Si ya registraste a mano un gasto del mismo valor y categoría este mes, se marca con ese y no se duplica.
+    El próximo mes las casillas vuelven a quedar libres.
+  </p>
+</section>
+
+{% set g_edit = (fijos|selectattr('id', 'equalto', editar)|first) if editar else none %}
+<section class="tarjeta" id="formulario">
+  <header><h2>{{ 'Editar «' ~ g_edit.descripcion ~ '»' if g_edit else 'Agregar un gasto fijo' }}</h2></header>
+  <form method="post" action="/movimientos/fijos/guardar">
+    {% if g_edit %}<input type="hidden" name="id" value="{{ g_edit.id }}">{% endif %}
+    <div class="campos">
+      <div><label>Descripción</label><input type="text" name="descripcion" required maxlength="200" value="{{ g_edit.descripcion if g_edit }}" placeholder="Ej.: Internet"></div>
+      <div><label>Valor</label><input type="text" name="valor" required inputmode="numeric" value="{{ g_edit.valor|miles if g_edit }}" placeholder="0"></div>
+      <div><label>Categoría</label>
+        <select name="categoria_id" required>
+          <option value="">— Elige una categoría —</option>
+          {{ opciones_categoria(categorias_gasto, g_edit.categoria_id if g_edit else none) }}
+        </select></div>
+      <div><label>Cuenta</label>
+        <select name="cuenta_id" required>
+          {% set sel = g_edit.cuenta_id if g_edit else cuenta_defecto %}
+          {% for c in cuentas %}<option value="{{ c.id }}" {{ 'selected' if c.id == sel }}>{{ c.nombre }}</option>{% endfor %}
+        </select></div>
+    </div>
+    <div class="acciones">
+      <button class="btn primario">{{ 'Guardar cambios' if g_edit else 'Agregar' }}</button>
+      {% if g_edit %}<a class="btn" href="/movimientos/fijos">Cancelar</a>{% endif %}
+    </div>
+  </form>
+  {% if g_edit %}
+  <form method="post" action="/movimientos/fijos/eliminar" onsubmit="return confirm('¿Eliminar este gasto fijo? Los gastos ya registrados se conservan.')" style="margin-top:12px">
+    <input type="hidden" name="id" value="{{ g_edit.id }}">
+    <button class="btn peligro peq">Eliminar gasto fijo</button>
+  </form>
+  <p class="muted pequeno" style="margin:12px 0 0">Los cambios aplican desde el próximo registro; lo ya registrado no cambia.</p>
+  {% endif %}
+</section>
+{% endblock %}

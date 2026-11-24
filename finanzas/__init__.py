@@ -1,0 +1,3 @@
+"""Sistema de gestión de finanzas personales."""
+
+__version__ = "0.1.0"

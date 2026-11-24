@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% from "_macros.html" import selector_categoria %}
+{% block titulo %}{{ 'Editar' if mov_id else 'Nuevo' }} movimiento{% endblock %}
+{% block contenido %}
+{% set tipo = d.tipo or 'gasto' %}
+{% set cat_sel = (d.categoria_id|int) if d.categoria_id else None %}
+<div class="cabecera">
+  <div><h1>{{ 'Editar movimiento #' ~ mov_id if mov_id else 'Nuevo movimiento' }}</h1>
+  {% if mov_id and d.eliminado_en %}<div class="sub" style="color:var(--mal-texto)">Eliminado el {{ d.eliminado_en }}</div>{% endif %}</div>
+  <a class="btn" href="{{ volver }}">Volver</a>
+</div>
+
+{% if errores %}<div class="banda error"><span class="icono">!</span><div><strong>Revisa estos datos:</strong><ul>{% for e in errores %}<li>{{ e }}</li>{% endfor %}</ul></div></div>{% endif %}
+{% if avisos %}<div class="banda aviso"><span class="icono">!</span><div><strong>Antes de guardar:</strong><ul>{% for a in avisos %}<li>{{ a }}</li>{% endfor %}</ul></div></div>{% endif %}
+
+<section class="tarjeta">
+  <form method="post" action="{{ '/movimientos/' ~ mov_id if mov_id else '/movimientos/nuevo' }}" id="form-mov">
+    <input type="hidden" name="volver" value="{{ volver }}">
+    {% if avisos and not mov_id %}<input type="hidden" name="confirmar_duplicado" value="1">{% endif %}
+    <div class="segmento" style="margin-bottom:16px">
+      {% for t, n in [('gasto','Gasto'),('ingreso','Ingreso'),('ahorro','Ahorro')] %}
+        <input type="radio" name="tipo" id="t-{{ t }}" value="{{ t }}" {{ 'checked' if tipo == t }}><label for="t-{{ t }}">{{ n }}</label>
+      {% endfor %}
+    </div>
+    <div class="campos">
+      <div><label>Fecha</label><input type="date" name="fecha" value="{{ d.fecha }}" min="{{ fecha_inicio.isoformat() }}" required></div>
+      <div><label>Valor (COP)</label><input type="text" name="valor" value="{{ d.valor or '' }}" inputmode="numeric" placeholder="45.000" required autocomplete="off"></div>
+      <div class="campo-ancho"><label>Descripción</label><input type="text" name="descripcion" value="{{ d.descripcion or '' }}" maxlength="200" required></div>
+      <div><label>Cuenta</label>
+        <select name="cuenta_id" required>
+          {% for c in cuentas %}<option value="{{ c.id }}" {{ 'selected' if (d.cuenta_id|string) == (c.id|string) }}>{{ c.nombre }}</option>{% endfor %}
+        </select></div>
+      <div data-solo="gasto ingreso"><label>Categoría</label>{{ selector_categoria('categoria_id', tipo, categorias_gasto, categorias_ingreso, cat_sel) }}</div>
+      <div data-solo="ahorro"><label>Meta de ahorro (opcional)</label>
+        <select name="meta_id"><option value="">Ahorro general</option>
+          {% for m in metas %}<option value="{{ m.id }}" {{ 'selected' if (d.meta_id|string) == (m.id|string) }}>{{ m.nombre }}</option>{% endfor %}
+        </select></div>
+      <div data-solo="gasto ingreso"><label>Naturaleza</label>
+        <select name="naturaleza"><option value="">Según la categoría</option>
+          {% for n in ['fijo','variable','extraordinario'] %}<option value="{{ n }}" {{ 'selected' if d.naturaleza == n }}>{{ n|capitalize }}</option>{% endfor %}
+        </select></div>
+      <div data-solo="gasto"><label>Necesidad</label>
+        <select name="necesidad"><option value="">Según la categoría</option>
+          {% for n in ['esencial','discrecional'] %}<option value="{{ n }}" {{ 'selected' if d.necesidad == n }}>{{ n|capitalize }}</option>{% endfor %}
+        </select></div>
+      <div class="campo-ancho"><label>Observaciones</label><input type="text" name="observaciones" value="{{ d.observaciones or '' }}"></div>
+    </div>
+    <div class="acciones">
+      {% if not (mov_id and d.eliminado_en) %}
+      <button class="btn primario">{{ 'Guardar cambios' if mov_id else ('Registrar de todos modos' if avisos else 'Registrar') }}</button>
+      {% endif %}
+      <a class="btn" href="{{ volver }}">Cancelar</a>
+    </div>
+  </form>
+  {% if mov_id %}
+    <div class="acciones" style="justify-content:flex-end">
+      {% if d.eliminado_en %}
+        <form method="post" action="/movimientos/{{ mov_id }}/restaurar"><button class="btn">Restaurar movimiento</button></form>
+      {% else %}
+        <form method="post" action="/movimientos/{{ mov_id }}/eliminar" onsubmit="return confirm('¿Eliminar este movimiento? Se conserva en el historial y se puede restaurar.')">
+          <input type="hidden" name="volver" value="{{ volver }}"><button class="btn peligro">Eliminar</button></form>
+      {% endif %}
+    </div>
+  {% endif %}
+</section>
+
+{% if historial %}
+<section class="tarjeta" style="margin-top:16px">
+  <header><h2>Historial de cambios</h2><span class="muted">auditoría automática</span></header>
+  <table><tbody>
+  {% for h in historial %}
+    <tr><td class="num">{{ h.en }}</td><td>{{ {'crear':'Creado','modificar':'Modificado','eliminar':'Eliminado'}[h.accion] }}
+      {% if h.accion == 'modificar' and h.antes and h.despues %}
+        {% set a = h.antes|fromjson %}{% set b = h.despues|fromjson %}
+        <div class="muted pequeno">{% for campo, valor in b.items() if a[campo] != valor %}{{ campo }}: {{ a[campo] }} → {{ valor }}{{ ' · ' if not loop.last }}{% endfor %}</div>
+      {% endif %}{% if d.origen == 'importacion' and h.accion == 'crear' %}<div class="muted pequeno">desde el lote <a href="/importar/{{ d.lote_id }}">#{{ d.lote_id }}</a></div>{% endif %}</td></tr>
+  {% endfor %}
+  </tbody></table>
+</section>
+{% endif %}
+{% endblock %}
+{% block scripts %}<script src="/static/formulario.js?v={{ version }}"></script>{% endblock %}
