@@ -27,6 +27,9 @@
         ("/importar", "Importar", "M12 3v12m0 0l-4-4m4 4l4-4M4 17v3h16v-3"),
         ("/configuracion", "Configuración", "M12 15a3 3 0 100-6 3 3 0 000 6zm7.4-3a7.4 7.4 0 00-.1-1.3l2-1.6-2-3.4-2.4 1a7.6 7.6 0 00-2.2-1.3L14.3 2h-4l-.4 2.4a7.6 7.6 0 00-2.2 1.3l-2.4-1-2 3.4 2 1.6a7.4 7.4 0 000 2.6l-2 1.6 2 3.4 2.4-1c.7.6 1.4 1 2.2 1.3l.4 2.4h4l.4-2.4c.8-.3 1.5-.7 2.2-1.3l2.4 1 2-3.4-2-1.6c.1-.4.1-.9.1-1.3z"),
       ] %}
+      {% if modo_navegador() %}{# versión GitHub Pages: clave y copia cifrada (las maneja navegador/motor.js) #}
+        {% set enlaces = enlaces + [("/seguridad", "Seguridad", "M6 11h12v10H6zM8 11V7a4 4 0 018 0v4")] %}
+      {% endif %}
       {% for href, nombre, icono in enlaces %}
         {% set activo = (href == "/" and ruta == "/") or (href != "/" and ruta.startswith(href)) %}
         <a href="{{ href }}" class="{{ 'activo' if activo }}" title="{{ nombre }}" aria-label="{{ nombre }}">
@@ -35,7 +38,7 @@
         </a>
       {% endfor %}
     </nav>
-    <div class="pie">Datos locales · v{{ version }}</div>
+    <div class="pie">{{ "Datos cifrados" if modo_navegador() else "Datos locales" }} · v{{ version }}</div>
   </aside>
   <main class="contenido">
     {% if demo_activo %}

@@ -13,37 +13,108 @@
   <link rel="manifest" href="manifest.webmanifest">
   <title>Finanzas personales</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%232a78d6'/%3E%3Ctext x='16' y='22' font-size='17' font-family='Segoe UI,sans-serif' font-weight='700' text-anchor='middle' fill='white'%3E$%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="static/app.css">
   <style>
-    :root { --fondo: #fcfcfb; --tinta: #0b0b0b; --tinta2: #5b5b57; --primario: #2a78d6; --error: #c0392b; }
-    @media (prefers-color-scheme: dark) { :root { --fondo: #141413; --tinta: #f1f0ec; --tinta2: #a9a8a2; } }
-    * { box-sizing: border-box; }
-    html, body { margin: 0; height: 100%; background: var(--fondo); color: var(--tinta);
-                 font: 15px/1.45 "Segoe UI", -apple-system, system-ui, sans-serif; }
+    html, body { margin: 0; height: 100%; }
+    body { background: var(--plano, var(--superficie-2)); }
     #vista { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; display: none;
-             padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left); background: var(--fondo); }
-    #carga { position: fixed; inset: 0; display: grid; place-items: center; padding: 16px; }
-    .caja { text-align: center; max-width: 340px; }
-    .marca { width: 56px; height: 56px; border-radius: 14px; background: var(--primario); color: #fff; margin: 0 auto 16px;
-             display: grid; place-items: center; font-weight: 700; font-size: 28px; }
-    #paso { color: var(--tinta2); margin: 8px 0 0; }
-    #fallo { color: var(--error); white-space: pre-wrap; text-align: left; font-size: 13px; margin-top: 16px; display: none; }
-    #ocupado { position: fixed; top: 0; left: 0; height: 3px; width: 0; background: var(--primario); z-index: 9;
+             padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left); background: var(--superficie); }
+    .pantalla { position: fixed; inset: 0; display: grid; place-items: center; padding: 24px 16px; overflow-y: auto; }
+    .caja { width: 100%; max-width: 380px; background: var(--superficie); border: 1px solid var(--borde);
+            border-radius: 14px; padding: 28px 24px; box-shadow: var(--sombra); }
+    .caja .logo-grande { width: 52px; height: 52px; border-radius: 14px; background: #2a78d6; color: #fff;
+            display: grid; place-items: center; font-weight: 700; font-size: 26px; margin-bottom: 14px; }
+    .caja h1 { margin: 0 0 6px; font-size: 21px; }
+    .caja p { margin: 0 0 14px; }
+    .caja label { display: block; margin: 12px 0 4px; font-weight: 600; font-size: 13px; }
+    .caja input[type=password] { width: 100%; font-size: 16px; }
+    .caja .acciones { margin-top: 16px; }
+    .caja .btn { width: 100%; justify-content: center; }
+    .nota { font-size: 12.5px; color: var(--tinta-2); }
+    .alerta { background: rgba(192, 57, 43, .08); border: 1px solid rgba(192, 57, 43, .35); border-radius: 10px;
+              padding: 10px 12px; font-size: 13px; margin: 0 0 12px; }
+    .mensaje-error { color: #c0392b; font-size: 13.5px; min-height: 1.2em; margin-top: 10px; white-space: pre-wrap; }
+    #paso { color: var(--tinta-2); font-size: 13px; margin-top: 14px; }
+    #ocupado { position: fixed; top: 0; left: 0; height: 3px; width: 0; background: #2a78d6; z-index: 9;
                transition: width .4s ease; pointer-events: none; }
     #ocupado.activo { width: 70%; }
     body.ocupada #vista { pointer-events: none; }
+    [hidden] { display: none !important; }
+    /* panel de seguridad */
+    #panel { border: 0; padding: 0; background: transparent; max-width: 440px; width: calc(100% - 32px); }
+    #panel::backdrop { background: rgba(0, 0, 0, .4); }
+    #panel .caja { max-width: none; }
+    #panel h2 { margin: 18px 0 6px; font-size: 15px; }
+    #panel table { width: 100%; font-size: 13.5px; }
+    #panel td { padding: 4px 0; }
+    #panel td.der { text-align: right; }
+    .fila-botones { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+    .fila-botones .btn { width: auto; flex: 1; }
   </style>
 </head>
 <body>
   <div id="ocupado"></div>
-  <div id="carga" role="status" aria-live="polite">
-    <div class="caja">
-      <div class="marca">$</div>
-      <strong>Finanzas personales</strong>
-      <p id="paso">Preparando…</p>
-      <div id="fallo"></div>
-    </div>
+
+  <!-- Clave: crear (primera vez) o abrir -->
+  <div id="puerta" class="pantalla">
+    <form id="form-clave" class="caja" autocomplete="on">
+      <div class="logo-grande">$</div>
+      <div id="modo-abrir" hidden>
+        <h1>Finanzas personales</h1>
+        <p class="muted">Escribe tu clave para abrir tus datos.</p>
+        <input type="text" name="usuario" value="finanzas" autocomplete="username" hidden>
+        <label for="clave">Clave</label>
+        <input type="password" id="clave" autocomplete="current-password">
+      </div>
+      <div id="modo-crear" hidden>
+        <h1>Crea tu clave</h1>
+        <p class="muted">Tus datos se guardan cifrados con esta clave. Sin ella nadie puede leerlos.</p>
+        <div class="alerta"><strong>Importante:</strong> si la olvidas, <strong>nadie puede recuperar tus datos</strong>. Anótala en un lugar seguro.</div>
+        <input type="text" name="usuario" value="finanzas" autocomplete="username" hidden>
+        <label for="clave-nueva">Clave (mínimo 8 caracteres)</label>
+        <input type="password" id="clave-nueva" autocomplete="new-password" minlength="8">
+        <label for="clave-repetir">Repítela</label>
+        <input type="password" id="clave-repetir" autocomplete="new-password" minlength="8">
+      </div>
+      <div class="acciones"><button class="btn primario" id="boton-clave" type="submit" disabled>Cargando…</button></div>
+      <div class="mensaje-error" id="error-clave" role="alert"></div>
+      <div id="paso" role="status" aria-live="polite">Preparando…</div>
+    </form>
   </div>
+
   <iframe id="vista" title="Finanzas personales"></iframe>
+
+  <!-- Panel «Seguridad» -->
+  <dialog id="panel">
+    <div class="caja">
+      <h1>Seguridad</h1>
+      <table><tbody>
+        <tr><td>Cifrado</td><td class="der">AES-256 con tu clave</td></tr>
+        <tr><td>Guardado en este dispositivo</td><td class="der" id="panel-guardado">—</td></tr>
+        <tr><td>Protección contra borrado del navegador</td><td class="der" id="panel-persistente">—</td></tr>
+      </tbody></table>
+
+      <h2>Cambiar la clave</h2>
+      <form id="form-cambio">
+        <input type="text" name="usuario" value="finanzas" autocomplete="username" hidden>
+        <label for="cambio-actual">Clave actual</label>
+        <input type="password" id="cambio-actual" autocomplete="current-password" required>
+        <label for="cambio-nueva">Clave nueva (mínimo 8)</label>
+        <input type="password" id="cambio-nueva" autocomplete="new-password" minlength="8" required>
+        <label for="cambio-repetir">Repítela</label>
+        <input type="password" id="cambio-repetir" autocomplete="new-password" minlength="8" required>
+        <div class="mensaje-error" id="cambio-error" role="alert"></div>
+        <div class="fila-botones"><button class="btn primario" type="submit">Cambiar clave</button></div>
+      </form>
+
+      <div class="fila-botones" style="margin-top:22px">
+        <button class="btn" id="boton-bloquear" type="button">Bloquear ahora</button>
+        <button class="btn" id="boton-cerrar-panel" type="button">Cerrar</button>
+      </div>
+      <p class="nota" style="margin-top:12px">La app se bloquea sola si queda en segundo plano más de 10 minutos.</p>
+    </div>
+  </dialog>
+
   <script type="module" src="motor.js"></script>
 </body>
 </html>

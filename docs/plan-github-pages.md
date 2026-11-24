@@ -1,6 +1,6 @@
 # Plan: versión GitHub Pages con sincronización cifrada (opción A)
 
-Fecha: 23 nov 2026 · Estado: **aprobado**; fase 0 hecha (commit `d336f81`, etiqueta `v-pc-original`); fases 1 y 2 hechas (la app corre completa en el navegador con datos de demo).
+Fecha: 23 nov 2026 · Estado: **aprobado**; fase 0 hecha (commit `d336f81`, etiqueta `v-pc-original`); fases 1, 2 y 3 hechas (la app corre en el navegador; datos cifrados con clave en el dispositivo).
 
 Decisiones del usuario (23 nov 2026):
 - Tailscale y `acceso.py` se eliminan (fase 1); ya no se usarán.
@@ -94,3 +94,19 @@ en la fase 8, con tu aprobación explícita.
 - Crear el token fine-grained (te guío paso a paso; lo escribes tú directamente en la app).
 - Elegir la clave de cifrado y guardarla en un lugar seguro.
 - Probar en el iPhone y en el PC corporativo.
+
+## Formato del archivo cifrado (fase 3, `navegador/boveda.js`)
+
+El mismo archivo se guarda en el dispositivo (IndexedDB, clave `base`), se subirá al repo privado
+(fase 4) y lo leerá la app del PC (fase 6):
+
+```
+FINANZAS-CIFRADO-1\n
+{"v":1,"kdf":"PBKDF2-SHA256","iteraciones":600000,"sal":"<b64 16 B>","iv":"<b64 12 B>","compresion":"gzip","creado":"<ISO>"}\n
+<AES-256-GCM( gzip(base SQLite) ), con las dos líneas anteriores como datos asociados>
+```
+
+- Llave = PBKDF2-SHA256(clave normalizada NFC, sal, 600.000) → 256 bits. La sal cambia solo al cambiar la clave.
+- IV aleatorio nuevo en cada guardado. Alterar la cabecera hace fallar el descifrado.
+- La clave nunca se guarda; la llave vive solo en memoria mientras la app está abierta.
+- Bloqueo automático tras 10 min en segundo plano, y botón «Bloquear ahora» (panel Seguridad).

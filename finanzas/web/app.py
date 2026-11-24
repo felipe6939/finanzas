@@ -44,7 +44,7 @@ def url_con(request: Request, **cambios) -> str:
     return request.url.path + ("?" + urlencode(params) if params else "")
 
 
-plantillas.env.globals.update(version=__version__, url_con=url_con)
+plantillas.env.globals.update(version=__version__, url_con=url_con, modo_navegador=config.modo_navegador)
 
 
 def leer_valor(texto: str | None) -> int | None:
