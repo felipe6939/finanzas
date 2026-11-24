@@ -75,11 +75,13 @@ def ir(url: str, **params) -> RedirectResponse:
 
 def crear_app() -> FastAPI:
     app = FastAPI(title="Finanzas personales", docs_url=None, redoc_url=None, openapi_url=None)
-    app.mount("/static", StaticFiles(directory=str(DIR / "static")), name="static")
+    if not config.modo_navegador():  # en el navegador, static/ lo sirve GitHub Pages
+        app.mount("/static", StaticFiles(directory=str(DIR / "static")), name="static")
 
     con_inicial = conectar()
     migrar(con_inicial)
-    respaldo.respaldo_diario(con_inicial)
+    if not config.modo_navegador():  # en el navegador, el historial de la nube cumple esa función
+        respaldo.respaldo_diario(con_inicial)
     con_inicial.close()
 
     @app.middleware("http")
@@ -495,6 +497,9 @@ def crear_app() -> FastAPI:
     @app.get("/reporte.pdf")
     def descargar_reporte(request: Request):
         con = request.state.con
+        if config.modo_navegador():  # sin Edge: el navegador imprime el reporte («Guardar como PDF»)
+            return HTMLResponse(html_reporte(con, vista_previa=False).replace(
+                "</body>", "<script>addEventListener('load', () => setTimeout(print, 300));</script></body>"))
         try:
             pdf = reporte_pdf.html_a_pdf(html_reporte(con, vista_previa=False))
         except reporte_pdf.SinNavegador:

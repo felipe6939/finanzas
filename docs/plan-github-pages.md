@@ -1,6 +1,6 @@
 # Plan: versión GitHub Pages con sincronización cifrada (opción A)
 
-Fecha: 23 nov 2026 · Estado: **aprobado**; fase 0 hecha (commit `d336f81`, etiqueta `v-pc-original`); fase 1 en curso.
+Fecha: 23 nov 2026 · Estado: **aprobado**; fase 0 hecha (commit `d336f81`, etiqueta `v-pc-original`); fases 1 y 2 hechas (la app corre completa en el navegador con datos de demo).
 
 Decisiones del usuario (23 nov 2026):
 - Tailscale y `acceso.py` se eliminan (fase 1); ya no se usarán.

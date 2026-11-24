@@ -100,7 +100,8 @@
     });
     g.on("click", (p) => {
       const f = filas[p.dataIndex];
-      window.location.href = `/movimientos?mes=${datos.mes}&tipo=gasto&categoria=${f.id}`;
+      const destino = `/movimientos?mes=${datos.mes}&tipo=gasto&categoria=${f.id}`;
+      if (window.finanzasIr) window.finanzasIr(destino); else window.location.href = destino;
     });
     graficos.push(g);
   }

@@ -14,6 +14,11 @@ HOST = "127.0.0.1"  # solo accesible desde este computador
 PUERTO = 8765
 
 
+def modo_navegador() -> bool:
+    """True cuando la app corre dentro del navegador (Pyodide, versión GitHub Pages)."""
+    return os.environ.get("FINANZAS_MODO") == "navegador"
+
+
 def dir_datos() -> Path:
     return Path(os.environ.get("FINANZAS_DATOS", RAIZ / "data"))
 

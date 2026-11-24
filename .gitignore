@@ -6,6 +6,11 @@ informes/
 
 # Entorno
 .venv/
+.venv-pyodide/
+
+# Versión navegador: sitio generado y descargas
+sitio/
+navegador/.cache/
 __pycache__/
 *.pyc
 .pytest_cache/
