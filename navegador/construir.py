@@ -28,7 +28,7 @@ ARCHIVOS_BASE = ["pyodide.mjs", "pyodide.asm.mjs", "pyodide.asm.wasm", "python_s
 PAQUETES = ["fastapi", "jinja2", "lxml", "typing-extensions"]
 # Librerías 100 % Python que Pyodide no trae: se bajan de PyPI con la versión fija del PC.
 PYPI = {"python-multipart": "0.0.33", "python-docx": "1.2.0", "openpyxl": "3.1.5", "et-xmlfile": "2.0.0"}
-PROPIOS = ["index.html", "motor.js", "boveda.js", "nube.js", "sw.js", "manifest.webmanifest"]
+PROPIOS = ["index.html", "motor.js", "boveda.js", "nube.js", "biometria.js", "sw.js", "manifest.webmanifest"]
 
 
 def _normal(nombre: str) -> str:

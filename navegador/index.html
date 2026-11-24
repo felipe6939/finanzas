@@ -84,6 +84,7 @@
         <input type="text" name="usuario" value="finanzas" autocomplete="username" hidden>
         <label for="clave">Clave</label>
         <input type="password" id="clave" autocomplete="current-password">
+        <button class="btn" type="button" id="boton-bio" hidden style="width:100%; justify-content:center; margin-top:12px">Abrir con Face ID</button>
       </div>
       <div id="modo-crear" hidden>
         <h1>Crea tu clave</h1>
@@ -211,6 +212,17 @@
       <div class="fila-botones"><button class="btn" type="button" id="boton-restaurar-archivo">Restaurar este archivo</button></div>
       <div class="mensaje-error" id="copias-error" role="alert"></div>
       <p class="nota">Al restaurar (un archivo o una versión), lo que tienes ahora se guarda aparte y la app se vuelve a abrir con la copia elegida.</p>
+
+      <h2 id="bio-titulo">Abrir con Face ID</h2>
+      <p class="nota" id="bio-estado"></p>
+      <div id="bio-activar" hidden>
+        <input type="text" name="usuario" value="finanzas" autocomplete="username" hidden>
+        <label for="bio-clave">Tu clave actual (para guardarla protegida)</label>
+        <input type="password" id="bio-clave" autocomplete="current-password">
+        <div class="fila-botones"><button class="btn primario" type="button" id="boton-bio-activar">Activar</button></div>
+      </div>
+      <div class="fila-botones" id="bio-apagar" hidden><button class="btn" type="button" id="boton-bio-desactivar">Desactivar</button></div>
+      <div class="mensaje-error" id="bio-error" role="alert"></div>
 
       <h2>Cambiar la clave</h2>
       <form id="form-cambio">

@@ -159,3 +159,11 @@ FINANZAS-CIFRADO-1\n
 - Por eso la fase 6 (CLI de nube en el PC) y la migración de la fase 8 ya no hacen falta.
   La fase 8 queda en: crear la clave definitiva, punto de partida, conectar la nube (reemplaza la
   copia de prueba; las versiones de prueba quedan en el historial, cifradas con la clave de prueba).
+
+## Desbloqueo con Face ID (`navegador/biometria.js`)
+
+- WebAuthn con la extensión PRF: al activarlo (Seguridad, pidiendo la clave actual) se crea una llave de
+  acceso del sitio; el secreto PRF que entrega Face ID cifra la clave (HKDF → AES-GCM) y se guarda solo en
+  ese dispositivo (IndexedDB `biometria`). Al abrir: «Abrir con Face ID» → clave → apertura normal.
+- Se desactiva al cambiar la clave; si la clave cambió en otro dispositivo, se desactiva al fallar y se pide escribirla.
+- Requiere iOS 18+ (Safari/app del ícono). En el PC: Windows Hello si el navegador entrega PRF.

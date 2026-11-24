@@ -9,6 +9,7 @@
 
 import * as boveda from "./boveda.js";
 import * as nube from "./nube.js";
+import * as bio from "./biometria.js";
 
 const BASE = new URL("./", location.href);
 const $ = (id) => document.getElementById(id);
@@ -93,6 +94,24 @@ async function arrancar() {
   $("boton-clave").disabled = false;
   ponerModo(guardado ? "abrir" : "crear");
 
+  // Desbloqueo con Face ID: entrega la clave guardada y se abre como si se hubiera escrito.
+  let porBio = false;
+  if (guardado && await bio.activa()) {
+    const b = $("boton-bio");
+    b.textContent = "Abrir con " + bio.nombre();
+    b.hidden = false;
+    b.addEventListener("click", async () => {
+      $("error-clave").textContent = "";
+      try {
+        $("clave").value = await bio.desbloquear();
+        porBio = true;
+        $("form-clave").requestSubmit();
+      } catch (err) {
+        $("error-clave").textContent = err instanceof bio.Cancelado ? "" : (err.message || String(err));
+      }
+    });
+  }
+
   $("form-clave").addEventListener("submit", async (ev) => {
     ev.preventDefault();
     const error = $("error-clave");
@@ -136,14 +155,23 @@ async function arrancar() {
           if (r) { bytes = r.bytes; sesion = { llave: r.llave, sal: r.sal }; }
         }
       }
+      if (porBio) $("clave").value = "";
+      porBio = false;
       boton.textContent = "Cargando…";
       await python;
       await abrirApp(bytes, modo === "archivo");  // una copia abierta desde archivo se guarda de una vez
     } catch (err) {
       sesion = null;
       boton.disabled = false;
+      if (porBio && !(err instanceof boveda.ClaveIncorrecta)) $("clave").value = "";
       boton.textContent = TEXTOS[modo];
-      if (err instanceof boveda.ClaveIncorrecta) {
+      if (err instanceof boveda.ClaveIncorrecta && porBio) {  // la clave cambió desde que se activó
+        await bio.desactivar();
+        $("boton-bio").hidden = true;
+        $("clave").value = "";
+        error.textContent = `La clave guardada para ${bio.nombre()} ya no es la actual (¿la cambiaste en otro dispositivo?). ` +
+          `Escríbela y vuelve a activar ${bio.nombre()} en Seguridad.`;
+      } else if (err instanceof boveda.ClaveIncorrecta) {
         error.textContent = "Clave incorrecta.";
         ({ recuperar: $("rec-clave"), archivo: $("arch-clave") }[modo] || $("clave")).select();
       } else if (err && err.name === "PythonError") {
@@ -492,6 +520,7 @@ async function abrirPanel() {
   $("versiones").hidden = true;
   $("restaurar-archivo").value = "";
   $("restaurar-clave").value = "";
+  await pintarBio();
   if (!$("panel").open) $("panel").showModal();
 }
 
@@ -610,12 +639,51 @@ $("form-cambio").addEventListener("submit", async (ev) => {
     await nube.alCambiarLlave(sesion.llave);
     await guardarBase(true);
     $("panel").close();
-    alertaEnVista("Clave cambiada. Desde ahora, usa la clave nueva.", "ok");
+    const teniaBio = await bio.activa();
+    if (teniaBio) await bio.desactivar();
+    alertaEnVista("Clave cambiada. Desde ahora, usa la clave nueva." +
+                  (teniaBio ? ` Vuelve a activar ${bio.nombre()} en Seguridad.` : ""), "ok");
   } catch (err) {
     error.textContent = err instanceof boveda.ClaveIncorrecta ? "La clave actual no es correcta." : (err.message || String(err));
   } finally {
     boton.disabled = false;
   }
+});
+
+// ------------------------------------------------------------------ Face ID
+
+async function pintarBio() {
+  const n = bio.nombre();
+  $("bio-titulo").textContent = "Abrir con " + n;
+  $("bio-error").textContent = "";
+  $("bio-clave").value = "";
+  const [puede, activa] = [await bio.disponible(), await bio.activa()];
+  $("bio-activar").hidden = !puede || activa;
+  $("bio-apagar").hidden = !activa;
+  $("bio-estado").textContent = activa ? `Activado en este dispositivo: al abrir, toca «Abrir con ${n}».`
+    : puede ? `Abre la app con ${n} en vez de escribir la clave. Tu clave queda guardada solo en este dispositivo, protegida por ${n}.`
+    : `Este dispositivo o navegador no permite ${n} para sitios web.`;
+}
+
+$("boton-bio-activar").addEventListener("click", (ev) =>
+  conBoton(ev.currentTarget, $("bio-error"), async () => {
+    const clave = $("bio-clave").value;
+    if (!clave) throw new Error("Escribe tu clave actual.");
+    const g = await boveda.local.leer("base");  // se comprueba la clave descifrando la copia guardada
+    await boveda.descifrar(await boveda.derivarLlave(clave, boveda.leerCabecera(g.sobre).sal), g.sobre);
+    try {
+      await bio.activar(clave);
+    } catch (err) {
+      if (err instanceof bio.Cancelado) throw new Error("Se canceló. Puedes intentarlo de nuevo.");
+      throw err;
+    }
+    await pintarBio();
+    $("bio-estado").textContent = `¡Listo! La próxima vez toca «Abrir con ${bio.nombre()}».`;
+  }));
+
+$("boton-bio-desactivar").addEventListener("click", (ev) => {
+  if (!confirmado(ev.currentTarget)) return;
+  conBoton(ev.currentTarget, $("bio-error"), async () => { await bio.desactivar(); await pintarBio(); });
 });
 
 // ------------------------------------------------------------------ copias: descargar y restaurar
