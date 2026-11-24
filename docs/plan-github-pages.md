@@ -74,7 +74,7 @@ GitHub Pages (repo público: solo código)          Repo PRIVADO "finanzas-datos
 
 | # | Fase | Resultado verificable |
 |---|---|---|
-| 0 | **Preparación** — respaldo (hecho), primer commit local del estado actual con etiqueta `v-pc-original`; comprobar que GitHub abre desde el PC corporativo y el iPhone | Punto de retorno garantizado |
+| 0 | **Preparación** — respaldo (hecho), primer commit local del estado actual con etiqueta `v-pc-original`; comprobar que GitHub abre desde el PC y el iPhone | Punto de retorno garantizado |
 | 1 | **Compatibilidad** — correr pruebas; ajustar lo que use Python 3.14 y no exista en Pyodide; aislar Edge/Tailscale/respaldos en archivos detrás de un "modo navegador" | Todas las pruebas pasan; nada cambia en el PC |
 | 2 | **Motor en el navegador** — carpeta `navegador/`: arranque de Pyodide, empaquetado de `finanzas/`, enrutador ASGI, PWA instalable en el iPhone | La app corre con datos de demo en el navegador |
 | 3 | **Clave y cifrado** — pantalla de clave, cifrado/descifrado, copia local en IndexedDB | Recargar la página conserva los datos; sin clave no se leen |
@@ -93,7 +93,7 @@ en la fase 8, con tu aprobación explícita.
 - Cuenta de GitHub (fase 0), crear dos repos: `finanzas` (público) y `finanzas-datos` (privado).
 - Crear el token fine-grained (te guío paso a paso; lo escribes tú directamente en la app).
 - Elegir la clave de cifrado y guardarla en un lugar seguro.
-- Probar en el iPhone y en el PC corporativo.
+- Probar en el iPhone y en el PC.
 
 ## Formato del archivo cifrado (fase 3, `navegador/boveda.js`)
 

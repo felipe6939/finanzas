@@ -77,7 +77,7 @@ web (FastAPI)   CLI (python -m finanzas)   Skill importar-movimientos (usa la CL
 
 ## Acceso desde el iPhone
 
-- El acceso por Tailscale (`acceso.py`) se eliminó el 23 nov 2026: el PC corporativo lo bloquea.
+- El acceso por Tailscale (`acceso.py`) se eliminó el 23 nov 2026: no funcionaba en el PC.
 - Reemplazo en desarrollo: la misma app corriendo en el navegador (Pyodide) publicada en GitHub Pages,
   con los datos cifrados en un repo privado. Plan y fases: `docs/plan-github-pages.md`.
 
