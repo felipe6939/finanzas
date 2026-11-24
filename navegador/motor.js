@@ -358,9 +358,18 @@ function alertaEnVista(texto, tipo = "error") {
 function mostrar(html, url) {
   return new Promise((resolver) => {
     vista.addEventListener("load", () => { prepararPagina(url); resolver(); }, { once: true });
-    vista.srcdoc = html;
+    vista.srcdoc = html.replace("</head>", ESTILO_VISTA + "</head>");
   });
 }
+
+// iPhone (WebKit): el desplazamiento del documento de un <iframe> a veces no responde al dedo
+// (solo funcionaba en páginas con tablas desplazables). Se desplaza el <body> como una caja
+// con scroll propio, que WebKit sí maneja siempre.
+const ESTILO_VISTA = `<style id="ajuste-vista">
+html { height: 100%; overflow: hidden; }
+body { height: 100%; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; overscroll-behavior-y: contain; }
+@media print { html, body { height: auto; overflow: visible; } }
+</style>`;
 
 function prepararPagina(url) {
   const win = vista.contentWindow;
