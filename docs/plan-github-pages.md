@@ -1,6 +1,6 @@
 # Plan: versión GitHub Pages con sincronización cifrada (opción A)
 
-Fecha: 23 nov 2026 · Estado: **aprobado**; fase 0 hecha (commit `d336f81`, etiqueta `v-pc-original`); fases 1 a 5 hechas (la app corre en el navegador; datos cifrados con clave en el dispositivo; sincronización con el repo privado; protección anti pérdida).
+Fecha: 23 nov 2026 · Estado: **aprobado**; fase 0 hecha (etiqueta `v-pc-original`); fases 1 a 5 hechas y la 7 lista para publicar (la app corre en el navegador; datos cifrados con clave en el dispositivo; sincronización con el repo privado; protección anti pérdida).
 
 Decisiones del usuario (23 nov 2026):
 - Tailscale y `acceso.py` se eliminan (fase 1); ya no se usarán.
@@ -142,3 +142,12 @@ FINANZAS-CIFRADO-1\n
 - Pantalla inicial: «¿Tienes una copia descargada (.cifrado)? Ábrela».
 - Aviso al abrir si pasan más de 7 días sin descargar copia (Excel/CSV también cuentan).
 - Configuración → Exportar a Excel/CSV descarga el archivo; los respaldos de disco se reemplazan por un enlace a Seguridad.
+
+## Publicación (fase 7)
+
+- `.github/workflows/publicar.yml`: en cada push a `main` corre las pruebas (versiones de Pyodide,
+  `navegador/requisitos-pruebas.txt`), arma `sitio/`, lo audita (`navegador/auditar.py`: sin bases,
+  copias, exportaciones, importaciones, tokens ni rastros personales) y lo publica en Pages.
+- Repo público `felipe6939/finanzas` (solo código) → `https://felipe6939.github.io/finanzas/`.
+- Los commits usan el correo privado de GitHub (`…@users.noreply.github.com`); el historial local se
+  reescribió antes de publicar para no exponer el correo personal.
