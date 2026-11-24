@@ -9,7 +9,12 @@
 // - Sin internet: los cambios quedan en el dispositivo y se suben al volver la conexión
 //   (pendiente = la copia local es distinta de la última subida).
 //
-// IndexedDB: "nube" → {repo, token: {iv, datos}}; "nube-estado" → {sha, subido, problema, sincronizado}
+// - Freno de seguridad: si la copia a subir tiene MENOS registros que la última de la nube
+//   (los eliminados cuentan: solo bajan con un borrado en bloque o una copia vieja), no se sube
+//   hasta que el usuario lo confirme.
+//
+// IndexedDB: "nube" → {repo, token: {iv, datos}};
+//            "nube-estado" → {sha, subido, registros, problema, permitirMenos, sincronizado}
 //            "base-anterior" → la copia local que se reemplazó al bajar de la nube (por si acaso).
 
 import * as boveda from "./boveda.js";
@@ -33,7 +38,10 @@ let oyente = () => {};
 
 export const configurada = () => !!cfg;
 export const repo = () => cfg && cfg.repo;
-export const estadoActual = () => ({ fase, detalle, problema: estado.problema || null, sincronizado: estado.sincronizado || null });
+export const estadoActual = () => ({
+  fase, detalle, problema: estado.problema || null, sincronizado: estado.sincronizado || null,
+  freno: estado.problema === "freno" ? estado.freno : null,
+});
 export function alCambiar(fn) { oyente = fn; avisar(); }
 
 function avisar(nuevaFase, nuevoDetalle = "") {
@@ -87,9 +95,9 @@ async function verificarRepo(token, repo) {
   if (!info.private) throw new ErrorNube("Ese repositorio es PÚBLICO. Por seguridad, tus datos solo se guardan en un repositorio privado.", "publico");
 }
 
-/** Lee la copia de la nube: {sha, sobre} o null si todavía no existe. */
-async function leerRemoto(token, repo) {
-  const ruta = `${rutaRepo(repo)}/contents/${RUTA}`;
+/** Lee la copia de la nube (o la de una versión anterior, `ref`): {sha, sobre} o null si no existe. */
+async function leerRemoto(token, repo, ref = null) {
+  const ruta = `${rutaRepo(repo)}/contents/${RUTA}` + (ref ? `?ref=${encodeURIComponent(ref)}` : "");
   const r = await pedir(token, "GET", ruta);
   if (r.status === 404) return null;
   if (!r.ok) throw new ErrorNube(`GitHub respondió ${r.status} al leer la copia.`, "red");
@@ -150,7 +158,7 @@ async function adoptarRemoto(remoto, bytes, llave) {
   if (anterior) await boveda.local.guardar("base-anterior", { ...anterior, reemplazado: new Date().toISOString() });
   const guardado = new Date().toISOString();
   await boveda.local.guardar("base", { sobre: remoto.sobre, guardado, bytes: bytes.length });
-  await guardarEstado({ sha: remoto.sha, subido: guardado, problema: null, sincronizado: guardado });
+  await guardarEstado({ sha: remoto.sha, subido: guardado, registros: null, problema: null, permitirMenos: false, sincronizado: guardado });
   if (llave !== llaveSesion) await alCambiarLlave(llave);
 }
 
@@ -215,9 +223,15 @@ export async function subirAhora() {
     try {
       const base = await boveda.local.leer("base");
       if (!base || base.guardado === estado.subido) { avisar("ok"); return; }
+      if (!estado.permitirMenos && base.registros != null && estado.registros != null && base.registros < estado.registros) {
+        await guardarEstado({ problema: "freno", freno: { aqui: base.registros, nube: estado.registros } });
+        avisar();
+        return;
+      }
       avisar("subiendo");
       const sha = await escribirRemoto(cfg.token, cfg.repo, base.sobre, estado.sha);
-      await guardarEstado({ sha, subido: base.guardado, sincronizado: new Date().toISOString() });
+      await guardarEstado({ sha, subido: base.guardado, registros: base.registros ?? null, permitirMenos: false,
+                            sincronizado: new Date().toISOString() });
       avisar("ok");
     } catch (err) {
       if (err.tipo === "conflicto") { await guardarEstado({ problema: "conflicto" }); avisar(); }
@@ -228,6 +242,16 @@ export async function subirAhora() {
     subiendo = null;
     if (repetir) { repetir = false; subirAhora(); }
   }
+}
+
+/** Al abrir sin cambios pendientes: la copia local es la de la nube; se anota cuántos registros tiene. */
+export async function anotarRegistros(n) {
+  if (cfg && !estado.problema && estado.registros !== n) await guardarEstado({ registros: n });
+}
+
+/** Restauración deliberada (archivo o versión anterior): la próxima subida puede tener menos registros. */
+export async function permitirMenos() {
+  if (cfg) await guardarEstado({ permitirMenos: true, problema: estado.problema === "freno" ? null : estado.problema });
 }
 
 export const hayPendiente = async () => {
@@ -304,7 +328,23 @@ export async function usarCopiaNube(clave, llave, sal) {
 /** Conflicto: reemplazar la copia de la nube con la de este dispositivo (la anterior queda en el historial de GitHub). */
 export async function usarCopiaLocal() {
   const remoto = await leerRemoto(cfg.token, cfg.repo);
-  await guardarEstado({ sha: remoto ? remoto.sha : null, subido: null, problema: null });
+  await guardarEstado({ sha: remoto ? remoto.sha : null, subido: null, problema: null, permitirMenos: true });
   await subirAhora();
   if (fase !== "ok") throw new ErrorNube(detalle || "No se pudo subir.", "red");
+}
+
+// ------------------------------------------------------------------ versiones anteriores
+
+/** Últimas versiones de la copia en GitHub: [{sha, fecha, mensaje}], de la más reciente a la más antigua. */
+export async function listarVersiones(cuantas = 30) {
+  const r = await pedir(cfg.token, "GET", `${rutaRepo(cfg.repo)}/commits?path=${RUTA}&per_page=${cuantas}`);
+  if (!r.ok) throw new ErrorNube(`GitHub respondió ${r.status} al listar las versiones.`, "red");
+  return (await r.json()).map((c) => ({ sha: c.sha, fecha: c.commit.committer.date, mensaje: c.commit.message }));
+}
+
+/** El sobre cifrado de una versión anterior. */
+export async function leerVersion(sha) {
+  const v = await leerRemoto(cfg.token, cfg.repo, sha);
+  if (!v) throw new ErrorNube("Esa versión ya no tiene la copia.", "datos");
+  return v.sobre;
 }

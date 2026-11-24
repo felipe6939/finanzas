@@ -92,6 +92,17 @@
         <input type="password" id="clave-repetir" autocomplete="new-password" minlength="8">
         <p class="nota" style="margin-top:14px">¿Ya tienes tus datos en GitHub (desde otro dispositivo)?
           <button type="button" class="enlace" id="ir-recuperar">Recupéralos aquí</button></p>
+        <p class="nota">¿Tienes una copia descargada (.cifrado)? <button type="button" class="enlace" id="ir-archivo">Ábrela</button></p>
+      </div>
+      <div id="modo-archivo" hidden>
+        <h1>Abrir una copia</h1>
+        <p class="muted">Elige el archivo <strong>.cifrado</strong> que descargaste y escribe la clave con la que se guardó.</p>
+        <label for="arch-archivo">Archivo</label>
+        <input type="file" id="arch-archivo" accept=".cifrado,application/octet-stream">
+        <input type="text" name="usuario" value="finanzas" autocomplete="username" hidden>
+        <label for="arch-clave">Clave de esa copia</label>
+        <input type="password" id="arch-clave" autocomplete="current-password">
+        <p class="nota" style="margin-top:14px"><button type="button" class="enlace" id="ir-crear-2">Volver: empezar desde cero</button></p>
       </div>
       <div id="modo-recuperar" hidden>
         <h1>Recuperar mis datos</h1>
@@ -151,6 +162,12 @@
             <li><strong>Usar la de este dispositivo</strong>: la de la nube queda en el historial de GitHub.</li>
           </ul>
         </div>
+        <div id="nube-freno" class="aviso-nube mal" hidden>
+          <strong>Freno de seguridad: no se subió nada.</strong>
+          La copia de este dispositivo tiene <strong id="freno-aqui"></strong> registros y la de la nube <strong id="freno-nube"></strong>
+          (contando los eliminados). Pasa al borrar datos de ejemplo, al reiniciar o si esta copia es vieja.
+          Si lo hiciste a propósito, elige «Usar la de este dispositivo»; si no, «Usar la de la nube».
+        </div>
         <div id="nube-clave" class="aviso-nube mal" hidden>
           <strong>La copia de la nube usa otra clave</strong> (¿la cambiaste en otro dispositivo?). Escríbela para usar esa copia:
           <input type="text" name="usuario" value="finanzas" autocomplete="username" hidden>
@@ -166,6 +183,28 @@
           <button class="btn" type="button" id="boton-desconectar">Desconectar</button>
         </div>
       </div>
+
+      <h2>Copias de seguridad</h2>
+      <table><tbody>
+        <tr><td>Última copia descargada</td><td class="der" id="copia-fecha">nunca</td></tr>
+      </tbody></table>
+      <div class="fila-botones">
+        <button class="btn" type="button" id="boton-descargar-copia">Descargar copia cifrada</button>
+        <button class="btn" type="button" id="boton-versiones" hidden>Versiones en la nube</button>
+      </div>
+      <p class="nota" style="margin-top:8px">La copia cifrada (.cifrado) solo se abre con tu clave. Guárdala en tu PC o en Archivos del iPhone.
+        Te recordaré descargarla si pasan más de 7 días.</p>
+      <div id="versiones" hidden style="max-height:260px; overflow-y:auto; margin-top:8px">
+        <table><tbody id="versiones-lista"></tbody></table>
+      </div>
+      <label for="restaurar-archivo" style="margin-top:12px">Restaurar desde un archivo .cifrado</label>
+      <input type="file" id="restaurar-archivo" accept=".cifrado,application/octet-stream">
+      <input type="text" name="usuario" value="finanzas" autocomplete="username" hidden>
+      <label for="restaurar-clave">Clave de esa copia (solo si era distinta a la actual)</label>
+      <input type="password" id="restaurar-clave" autocomplete="off">
+      <div class="fila-botones"><button class="btn" type="button" id="boton-restaurar-archivo">Restaurar este archivo</button></div>
+      <div class="mensaje-error" id="copias-error" role="alert"></div>
+      <p class="nota">Al restaurar (un archivo o una versión), lo que tienes ahora se guarda aparte y la app se vuelve a abrir con la copia elegida.</p>
 
       <h2>Cambiar la clave</h2>
       <form id="form-cambio">

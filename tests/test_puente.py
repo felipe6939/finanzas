@@ -69,3 +69,33 @@ def test_multipart(pedir):
     r = asyncio.run(puente.peticion("POST", "/importar",
                                     [("content-type", f"multipart/form-data; boundary={limite}")], cuerpo))
     assert r["estado"] == 200 and "/importar/" in r["url"]
+
+
+def test_exportar_descarga_en_navegador(pedir):
+    pedir("POST", "/configuracion/demo-cargar", {})
+    for formato, ext in (("xlsx", ".xlsx"), ("csv", ".csv")):
+        r = pedir("POST", "/configuracion/exportar", {"formato": formato})
+        assert r["estado"] == 200
+        assert "attachment" in r["cabeceras"]["content-disposition"] and ext in r["cabeceras"]["content-disposition"]
+        assert r["texto"] is None and len(r["cuerpo"]) > 100
+
+
+def test_configuracion_navegador_sin_respaldos_de_disco(pedir):
+    html = pedir("GET", "/configuracion")["cuerpo"].decode()
+    assert "/configuracion/respaldo" not in html and 'href="/seguridad"' in html
+
+
+def test_revisar_base(pedir, entorno):
+    from finanzas import config
+    ruta = str(config.ruta_db())
+    antes = puente.revisar_base(ruta)
+    assert antes["integridad"] == "ok"
+    pedir("POST", "/configuracion/demo-cargar", {})
+    despues = puente.revisar_base(ruta)
+    assert despues["registros"] > antes["registros"]
+
+
+def test_revisar_base_danada(tmp_path):
+    ruta = tmp_path / "rota.db"
+    ruta.write_bytes(b"esto no es sqlite" * 100)
+    assert puente.revisar_base(str(ruta))["integridad"] != "ok"

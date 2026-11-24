@@ -14,7 +14,8 @@ boveda.local.guardar = async (k, v) => { almacen.set(k, structuredClone(v)); };
 boveda.local.borrar = async (k) => { almacen.delete(k); };
 
 // ---------------------------------------------------------------- GitHub simulado
-const gh = { privado: true, archivo: null, sinRed: false, commits: 0, tokenValido: "tok-prueba" };
+const gh = { privado: true, archivo: null, sinRed: false, commits: 0, tokenValido: "tok-prueba", historial: [] };
+const versionNueva = (sha, sobre) => { gh.archivo = { sha, sobre }; gh.historial.unshift({ sha, sobre, fecha: new Date().toISOString() }); };
 let contador = 0;
 const responder = (estado, cuerpo) => new Response(cuerpo == null ? null : JSON.stringify(cuerpo), { status: estado });
 
@@ -23,20 +24,26 @@ globalThis.fetch = async (url, op = {}) => {
   const u = new URL(url);
   assert.equal(u.origin, "https://api.github.com");
   if (op.headers.Authorization !== `Bearer ${gh.tokenValido}`) return responder(401, { message: "Bad credentials" });
+  if (u.pathname === "/repos/u/datos/commits") {
+    assert.equal(u.searchParams.get("path"), "finanzas.cifrado");
+    return responder(200, gh.historial.map((v) => ({ sha: "c-" + v.sha, commit: { message: "Actualización desde navegador · x", committer: { date: v.fecha } } })));
+  }
   const m = u.pathname.match(/^\/repos\/u\/datos(\/contents\/(.+))?$/);
   if (!m) return responder(404, {});
   if (!m[1]) return responder(200, { private: gh.privado });
   const metodo = op.method || "GET";
   if (metodo === "GET") {
-    if (!gh.archivo) return responder(404, {});
-    const b = boveda.b64(gh.archivo.sobre);
-    return responder(200, { sha: gh.archivo.sha, encoding: "base64", content: b.replace(/(.{60})/g, "$1\n") });
+    const ref = u.searchParams.get("ref");
+    const archivo = ref ? gh.historial.find((v) => "c-" + v.sha === ref) : gh.archivo;
+    if (!archivo) return responder(404, {});
+    const b = boveda.b64(archivo.sobre);
+    return responder(200, { sha: archivo.sha, encoding: "base64", content: b.replace(/(.{60})/g, "$1\n") });
   }
   if (metodo === "PUT") {
     const cuerpo = JSON.parse(op.body);
     if (gh.archivo && !cuerpo.sha) return responder(422, { message: "sha wasn't supplied" });
     if (gh.archivo && cuerpo.sha !== gh.archivo.sha) return responder(409, { message: "does not match" });
-    gh.archivo = { sha: "sha" + ++contador, sobre: boveda.deB64(cuerpo.content) };
+    versionNueva("sha" + ++contador, boveda.deB64(cuerpo.content));
     gh.commits++;
     return responder(gh.archivo.sha === "sha1" ? 201 : 200, { content: { sha: gh.archivo.sha } });
   }
@@ -47,10 +54,10 @@ const esperar = (ms) => new Promise((ok) => setTimeout(ok, ms));
 const texto = (bytes) => new TextDecoder().decode(bytes);
 const CLAVE = "clave-de-prueba-1";
 
-async function guardarLocal(llave, sal, contenido) {
+async function guardarLocal(llave, sal, contenido, registros = undefined) {
   const sobre = await boveda.cifrar(llave, sal, new TextEncoder().encode(contenido));
   await esperar(2);  // marcas de tiempo distintas
-  await boveda.local.guardar("base", { sobre, guardado: new Date().toISOString(), bytes: contenido.length });
+  await boveda.local.guardar("base", { sobre, guardado: new Date().toISOString(), bytes: contenido.length, registros });
 }
 
 /** Otro dispositivo sube una versión nueva (con la clave dada). */
@@ -58,7 +65,7 @@ async function subidaAjena(contenido, clave = CLAVE) {
   const sal = boveda.salNueva();
   const llave = await boveda.derivarLlave(clave, sal);
   const sobre = await boveda.cifrar(llave, sal, new TextEncoder().encode(contenido));
-  gh.archivo = { sha: "ajeno" + ++contador, sobre };
+  versionNueva("ajeno" + ++contador, sobre);
 }
 
 async function abrir(clave) {  // igual que motor.js al abrir
@@ -201,6 +208,43 @@ try {
     assert.equal(nube.configurada(), true);
   });
 
+  await prueba("freno de seguridad: no sube una copia con menos registros", async () => {
+    const ses = await abrir("clave-nueva-10");
+    await nube.anotarRegistros(10);                       // motor.js lo anota al abrir
+    await guardarLocal(ses.llave, ses.sal, "v10-mas", 12);
+    await nube.subirAhora();
+    assert.equal(texto(await boveda.descifrar(ses.llave, gh.archivo.sobre)), "v10-mas");
+    const commits = gh.commits;
+    await guardarLocal(ses.llave, ses.sal, "v11-menos", 4);
+    await nube.subirAhora();
+    assert.equal(gh.commits, commits, "no se subió");
+    assert.equal(nube.estadoActual().problema, "freno");
+    assert.deepEqual(nube.estadoActual().freno, { aqui: 4, nube: 12 });
+    await nube.usarCopiaLocal();                          // el usuario confirma
+    assert.equal(texto(await boveda.descifrar(ses.llave, gh.archivo.sobre)), "v11-menos");
+    assert.equal(nube.estadoActual().problema, null);
+    await guardarLocal(ses.llave, ses.sal, "v12", 5);     // desde ahí, el conteo nuevo es la referencia
+    await nube.subirAhora();
+    assert.equal(texto(await boveda.descifrar(ses.llave, gh.archivo.sobre)), "v12");
+  });
+
+  await prueba("restauración deliberada no activa el freno", async () => {
+    const ses = await abrir("clave-nueva-10");
+    await guardarLocal(ses.llave, ses.sal, "v13-restaurada", 1);
+    await nube.permitirMenos();
+    await nube.subirAhora();
+    assert.equal(texto(await boveda.descifrar(ses.llave, gh.archivo.sobre)), "v13-restaurada");
+  });
+
+  await prueba("versiones anteriores: listar y leer", async () => {
+    const versiones = await nube.listarVersiones();
+    assert.ok(versiones.length >= 5);
+    assert.ok(versiones[0].fecha >= versiones[1].fecha);
+    const ses = await abrir("clave-nueva-10");
+    const vieja = await nube.leerVersion(versiones[2].sha);
+    assert.equal(texto(await boveda.descifrar(ses.llave, vieja)), "v11-menos");
+  });
+
   // ---------------------------------------------------------------- dispositivo nuevo
   await prueba("recuperar en un dispositivo nuevo", async () => {
     almacen.clear();
@@ -208,9 +252,9 @@ try {
     await assert.rejects(nube.recuperar("u/datos", "tok-prueba", "mala-clave"), boveda.ClaveIncorrecta);
     assert.equal(almacen.has("base"), false);
     const r = await nube.recuperar("u/datos", "tok-prueba", "clave-nueva-10");
-    assert.equal(texto(r.bytes), "v9");
+    assert.equal(texto(r.bytes), "v13-restaurada");
     const ses = await abrir("clave-nueva-10");
-    assert.equal(ses.contenido, "v9");
+    assert.equal(ses.contenido, "v13-restaurada");
     assert.equal(await nube.hayPendiente(), false);
   });
 

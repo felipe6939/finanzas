@@ -108,3 +108,28 @@ async def peticion(metodo: str, url: str, cabeceras: list | None = None, cuerpo:
         cuerpo_resp = texto.encode("utf-8")
     return {"estado": r["estado"], "url": url, "tipo": tipo, "cabeceras": r["cabeceras"],
             "cuerpo": cuerpo_resp, "texto": texto, "modifico": modifico and r["estado"] < 400}
+
+
+_TABLAS_REGISTROS = ("movimientos", "transferencias", "prestamos", "abonos_prestamo")
+
+
+def revisar_base(ruta: str) -> dict:
+    """Antes de guardar o subir: integridad de la base y cuántos registros tiene.
+
+    `registros` cuenta también los eliminados (se marcan con `eliminado_en`, no se borran):
+    el número solo baja si se borra en bloque (datos de ejemplo, reinicio) o si la copia es
+    vieja/dañada. Con eso la nube frena una subida que perdería datos.
+    """
+    import sqlite3
+
+    con = sqlite3.connect(f"file:{ruta}?mode=ro", uri=True)
+    try:
+        integridad = con.execute("PRAGMA integrity_check").fetchone()[0]
+        existentes = {f[0] for f in con.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
+        registros = sum(con.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]
+                        for t in _TABLAS_REGISTROS if t in existentes)
+    except sqlite3.DatabaseError as e:
+        return {"integridad": f"base dañada: {e}", "registros": 0}
+    finally:
+        con.close()
+    return {"integridad": integridad, "registros": registros}

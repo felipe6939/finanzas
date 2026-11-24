@@ -237,16 +237,25 @@
 
 <div class="rejilla r-2">
   <section class="tarjeta">
+    {% if modo_navegador() %}
+    <header><h2>Respaldos y exportación</h2></header>
+    <p class="sec pequeno" style="margin-top:0">Tus datos se guardan cifrados en este dispositivo y, si conectaste la nube, en tu repositorio privado con historial de versiones. La copia cifrada descargable y la restauración de versiones están en <a href="/seguridad">Seguridad</a>.</p>
+    <div class="acciones" style="margin-top:0">
+      <a class="btn" href="/seguridad">Copias y versiones</a>
+    {% else %}
     <header><h2>Respaldos y exportación</h2><span class="muted">{{ ruta_datos }}</span></header>
     <p class="sec pequeno" style="margin-top:0">Se crea un respaldo automático cada día al abrir la app y antes de cada importación, reversión o cambio de esquema. Se conservan los 30 más recientes y el último de cada mes.</p>
     <div class="acciones" style="margin-top:0">
       <form method="post" action="/configuracion/respaldo"><button class="btn">Crear respaldo ahora</button></form>
+    {% endif %}
       <form method="post" action="/configuracion/exportar"><input type="hidden" name="formato" value="xlsx"><button class="btn">Exportar a Excel</button></form>
       <form method="post" action="/configuracion/exportar"><input type="hidden" name="formato" value="csv"><button class="btn">Exportar CSV</button></form>
     </div>
+    {% if not modo_navegador() %}
     <table style="margin-top:12px"><tbody>
       {% for r in respaldos %}<tr><td class="sec pequeno">{{ r.name }}</td></tr>{% else %}<tr><td class="muted">Sin respaldos todavía.</td></tr>{% endfor %}
     </tbody></table>
+    {% endif %}
   </section>
   <section class="tarjeta">
     <header><h2>Datos de ejemplo</h2></header>

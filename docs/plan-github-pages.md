@@ -1,6 +1,6 @@
 # Plan: versión GitHub Pages con sincronización cifrada (opción A)
 
-Fecha: 23 nov 2026 · Estado: **aprobado**; fase 0 hecha (commit `d336f81`, etiqueta `v-pc-original`); fases 1 a 4 hechas (la app corre en el navegador; datos cifrados con clave en el dispositivo; sincronización con el repo privado).
+Fecha: 23 nov 2026 · Estado: **aprobado**; fase 0 hecha (commit `d336f81`, etiqueta `v-pc-original`); fases 1 a 5 hechas (la app corre en el navegador; datos cifrados con clave en el dispositivo; sincronización con el repo privado; protección anti pérdida).
 
 Decisiones del usuario (23 nov 2026):
 - Tailscale y `acceso.py` se eliminan (fase 1); ya no se usarán.
@@ -128,3 +128,17 @@ FINANZAS-CIFRADO-1\n
 - Dispositivo nuevo: «Recupéralos aquí» en la pantalla de crear clave (repositorio + token + clave).
 - Indicador abajo a la derecha: Sincronizado / Subiendo / Pendiente / Conflicto / Error / Solo en este dispositivo.
 - Pruebas: `node navegador/pruebas/prueba_nube.mjs` (GitHub simulado; la corre `tests/test_nube_js.py`).
+
+## Anti pérdida (fase 5)
+
+- Antes de cada guardado: `PRAGMA integrity_check` (`puente.revisar_base`). Si falla, no se guarda ni se sube.
+- Si nada cambió (mismos bytes), no se guarda ni se sube (evita commits vacíos).
+- Freno de seguridad: `registros` = filas de movimientos, transferencias, préstamos y abonos (los
+  eliminados cuentan). Si la copia a subir tiene menos que la última de la nube → «Freno», no se sube
+  hasta que el usuario elija. Una restauración deliberada no activa el freno.
+- Seguridad → Copias de seguridad: «Descargar copia cifrada» (`finanzas-AAAA-MM-DD.cifrado`),
+  «Restaurar desde un archivo», «Versiones en la nube» (últimas 30, cada una con «Restaurar»).
+  Al restaurar, la copia actual queda en `base-anterior` y la restaurada se cifra con la clave actual.
+- Pantalla inicial: «¿Tienes una copia descargada (.cifrado)? Ábrela».
+- Aviso al abrir si pasan más de 7 días sin descargar copia (Excel/CSV también cuentan).
+- Configuración → Exportar a Excel/CSV descarga el archivo; los respaldos de disco se reemplazan por un enlace a Seguridad.

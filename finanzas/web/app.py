@@ -614,6 +614,13 @@ def crear_app() -> FastAPI:
                 msg = f"Respaldo creado: {ruta.name}"
             elif seccion == "exportar":
                 ruta = respaldo.exportar(con, form.get("formato", "xlsx"))
+                if config.modo_navegador():  # en el navegador: se descarga el archivo
+                    tipo = "text/csv" if ruta.suffix == ".csv" else \
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    contenido = ruta.read_bytes()
+                    ruta.unlink(missing_ok=True)
+                    return Response(contenido, media_type=tipo,
+                                    headers={"Content-Disposition": f'attachment; filename="{ruta.name}"'})
                 msg = f"Exportado en {ruta}"
             elif seccion == "demo-cargar":
                 n = demo.cargar(con)
