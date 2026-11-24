@@ -27,8 +27,10 @@ con plantillas Jinja2 y ECharts (local). Arquitectura y decisiones: `docs/arquit
   `analytics/reporte.py` arma el reporte PDF con corte a hoy usando esas definiciones.
 - `finanzas/web` — app web (solo 127.0.0.1:8765). `web/reporte_pdf.py`: gráficos SVG y HTML→PDF con Edge/Chrome.
 - `finanzas/cli.py` — comandos `python -m finanzas ...`.
+- Uso diario (desde 24 nov 2026): versión web https://felipe6939.github.io/finanzas/ (PC e iPhone), datos
+  cifrados en el repo privado `felipe6939/finanzas-datos`; la app de escritorio y `data/` quedan como archivo.
 - Acceso desde el iPhone: Tailscale se eliminó (23 nov 2026). La versión GitHub Pages con datos
-  cifrados en un repo privado está en desarrollo: `docs/plan-github-pages.md`. Nunca escuchar en 0.0.0.0.
+  cifrados en un repo privado: `docs/plan-github-pages.md`. Nunca escuchar en 0.0.0.0.
 - `finanzas/respaldo.py`, `finanzas/demo.py` — respaldos/exportación, datos de ejemplo/reinicio.
 
 ## Comandos

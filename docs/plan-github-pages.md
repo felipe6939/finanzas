@@ -1,6 +1,6 @@
 # Plan: versión GitHub Pages con sincronización cifrada (opción A)
 
-Fecha: 23 nov 2026 · Estado: **aprobado**; fase 0 hecha (etiqueta `v-pc-original`); fases 1 a 5 hechas y la 7 lista para publicar (la app corre en el navegador; datos cifrados con clave en el dispositivo; sincronización con el repo privado; protección anti pérdida).
+Fecha: 23 nov 2026 · Estado: **aprobado**; fase 0 hecha (etiqueta `v-pc-original`); fases 1 a 5 y 7 hechas; publicada en https://felipe6939.github.io/finanzas/ (la app corre en el navegador; datos cifrados con clave en el dispositivo; sincronización con el repo privado; protección anti pérdida).
 
 Decisiones del usuario (23 nov 2026):
 - Tailscale y `acceso.py` se eliminan (fase 1); ya no se usarán.
@@ -151,3 +151,11 @@ FINANZAS-CIFRADO-1\n
 - Repo público `felipe6939/finanzas` (solo código) → `https://felipe6939.github.io/finanzas/`.
 - Los commits usan el correo privado de GitHub (`…@users.noreply.github.com`); el historial local se
   reescribió antes de publicar para no exponer el correo personal.
+
+## Decisión del usuario (24 nov 2026): empezar de cero en la versión web
+
+- La app de escritorio (`iniciar.bat`, `data/`) se deja de usar; su copia se conserva intacta como archivo.
+- No se migran los datos de la app local: la versión web arranca vacía con la clave definitiva.
+- Por eso la fase 6 (CLI de nube en el PC) y la migración de la fase 8 ya no hacen falta.
+  La fase 8 queda en: crear la clave definitiva, punto de partida, conectar la nube (reemplaza la
+  copia de prueba; las versiones de prueba quedan en el historial, cifradas con la clave de prueba).
