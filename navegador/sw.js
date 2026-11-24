@@ -5,7 +5,7 @@ const CACHE = "finanzas-" + VERSION;
 const ARCHIVOS = __ARCHIVOS__;
 
 self.addEventListener("install", (ev) => {
-  ev.waitUntil(caches.open(CACHE).then((c) => c.addAll(ARCHIVOS)).then(() => self.skipWaiting()));
+  ev.waitUntil(caches.open(CACHE).then((c) => c.addAll(ARCHIVOS.map((u) => new Request(u, { cache: "reload" })))).then(() => self.skipWaiting()));
 });
 
 self.addEventListener("activate", (ev) => {

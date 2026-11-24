@@ -17,6 +17,7 @@ const RUTA_DB = "/datos/finanzas.db";
 const BLOQUEO_MS = 10 * 60 * 1000;
 const DIAS_RECORDAR_COPIA = 7;
 
+let versionApp = "";
 let py = null;          // Pyodide
 let peticionPy = null;  // finanzas.web.puente.peticion
 let urlActual = "/";
@@ -45,6 +46,8 @@ async function bajar(ruta) {
 async function prepararPython() {
   paso("Cargando Python…");
   const manifiesto = JSON.parse(new TextDecoder().decode(await bajar("app/manifiesto.json")));
+  versionApp = manifiesto.version;
+  $("version").textContent = "Versión " + versionApp.slice(0, 7);
   const { loadPyodide } = await import(new URL("pyodide/pyodide.mjs", BASE).href);
   py = await loadPyodide({ indexURL: new URL("pyodide/", BASE).href });
   paso("Cargando librerías…");
@@ -362,18 +365,43 @@ function mostrar(html, url) {
   });
 }
 
-// iPhone (WebKit): el desplazamiento del documento de un <iframe> a veces no responde al dedo
-// (solo funcionaba en páginas con tablas desplazables). Se desplaza el <body> como una caja
-// con scroll propio, que WebKit sí maneja siempre.
-const ESTILO_VISTA = `<style id="ajuste-vista">
-html { height: 100%; overflow: hidden; }
-body { height: 100%; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; overscroll-behavior-y: contain; }
-@media print { html, body { height: auto; overflow: visible; } }
-</style>`;
+// Pantallas táctiles (iPhone): el desplazamiento DENTRO de un <iframe> no es confiable en WebKit
+// (algunas páginas no se movían con el dedo). Ahí el iframe crece a la altura de su contenido y
+// se desplaza la página exterior, como cualquier sitio. En el PC se desplaza el iframe, como antes.
+const ALTO_AUTO = matchMedia("(hover: none) and (pointer: coarse)").matches;
+if (ALTO_AUTO) document.documentElement.classList.add("alto-auto");
+const ESTILO_VISTA = ALTO_AUTO ? `<style id="ajuste-vista">
+html, body { overflow: hidden; }
+.app { min-height: 0 !important; }
+@media print { html, body { overflow: visible; } }
+</style>` : "";
+
+let observadorAlto = null;
+
+function ajustarAlto() {
+  const doc = vista.contentDocument;
+  if (!ALTO_AUTO || !doc || !doc.body) return;
+  const margen = parseFloat(doc.defaultView.getComputedStyle(doc.body).marginBottom) || 0;
+  const alto = Math.ceil(doc.body.getBoundingClientRect().bottom + margen);
+  vista.style.height = Math.max(alto, window.innerHeight) + "px";
+}
 
 function prepararPagina(url) {
   const win = vista.contentWindow;
   const doc = vista.contentDocument;
+  if (ALTO_AUTO) {
+    if (observadorAlto) observadorAlto.disconnect();
+    observadorAlto = new win.ResizeObserver(() => ajustarAlto());
+    observadorAlto.observe(doc.body);
+    ajustarAlto();
+    window.scrollTo(0, 0);
+    // Los diálogos modales (Configuración) se abren donde está mirando el usuario, no arriba del todo.
+    const abrirModal = win.HTMLDialogElement.prototype.showModal;
+    win.HTMLDialogElement.prototype.showModal = function () {
+      abrirModal.call(this);
+      Object.assign(this.style, { position: "absolute", top: window.scrollY + 16 + "px", margin: "0 auto", maxHeight: window.innerHeight - 32 + "px" });
+    };
+  }
   document.title = doc.title || "Finanzas personales";
   win.finanzasIr = (destino) => navegar("GET", destino);
   // form.submit() no dispara el evento «submit» (lo usan los filtros de Movimientos).
@@ -447,6 +475,7 @@ const fechaHora = (iso) => new Date(iso).toLocaleString("es-CO", { dateStyle: "m
 async function abrirPanel() {
   const g = await boveda.local.leer("base");
   $("panel-guardado").textContent = g ? fechaHora(g.guardado) : "—";
+  $("panel-version").textContent = versionApp.slice(0, 7) || "—";
   let persistente = false;
   try { persistente = navigator.storage && navigator.storage.persisted ? await navigator.storage.persisted() : false; } catch {}
   $("panel-persistente").textContent = persistente ? "activa" : "no garantizada";

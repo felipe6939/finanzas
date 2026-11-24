@@ -40,6 +40,10 @@
     #ocupado.activo { width: 70%; }
     body.ocupada #vista { pointer-events: none; }
     [hidden] { display: none !important; }
+    /* pantallas táctiles: el iframe crece con su contenido y se desplaza la página (motor.js, ALTO_AUTO) */
+    html.alto-auto, html.alto-auto body { height: auto; min-height: 100%; }
+    html.alto-auto #vista { position: absolute; inset: 0 0 auto 0; height: 100vh; }
+    #version { margin-top: 6px; font-size: 11px; color: var(--tinta-3); }
     /* panel de seguridad */
     #panel { border: 0; padding: 0; background: transparent; max-width: 440px; width: calc(100% - 32px); }
     #panel::backdrop { background: rgba(0, 0, 0, .4); }
@@ -119,6 +123,7 @@
       <div class="acciones"><button class="btn primario" id="boton-clave" type="submit" disabled>Cargando…</button></div>
       <div class="mensaje-error" id="error-clave" role="alert"></div>
       <div id="paso" role="status" aria-live="polite">Preparando…</div>
+      <div id="version"></div>
     </form>
   </div>
 
@@ -130,6 +135,7 @@
     <div class="caja">
       <h1>Seguridad</h1>
       <table><tbody>
+        <tr><td>Versión de la app</td><td class="der" id="panel-version">—</td></tr>
         <tr><td>Cifrado</td><td class="der">AES-256 con tu clave</td></tr>
         <tr><td>Guardado en este dispositivo</td><td class="der" id="panel-guardado">—</td></tr>
         <tr><td>Protección contra borrado del navegador</td><td class="der" id="panel-persistente">—</td></tr>
