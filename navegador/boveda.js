@@ -12,8 +12,12 @@ export const ITERACIONES = 600000;
 const enc = new TextEncoder();
 const dec = new TextDecoder();
 
-const b64 = (bytes) => btoa(String.fromCharCode(...bytes));
-const deB64 = (texto) => Uint8Array.from(atob(texto), (c) => c.charCodeAt(0));
+export function b64(bytes) {  // por bloques: String.fromCharCode(...x) falla con arreglos grandes
+  let s = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+export const deB64 = (texto) => Uint8Array.from(atob(texto.replace(/\s/g, "")), (c) => c.charCodeAt(0));
 
 export class ClaveIncorrecta extends Error {}
 
@@ -63,6 +67,21 @@ export async function descifrar(llave, sobre) {
     throw new ClaveIncorrecta("Clave incorrecta.");
   }
   return transformar(new Uint8Array(comprimido), new DecompressionStream("gzip"));
+}
+
+/** Cifra un texto corto (el token de GitHub) con la llave de la sesión. */
+export async function cifrarTexto(llave, texto) {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const datos = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, llave, enc.encode(texto)));
+  return { iv, datos };
+}
+
+export async function descifrarTexto(llave, { iv, datos }) {
+  try {
+    return dec.decode(await crypto.subtle.decrypt({ name: "AES-GCM", iv }, llave, datos));
+  } catch {
+    throw new ClaveIncorrecta("Clave incorrecta.");
+  }
 }
 
 export async function huella(bytes) {

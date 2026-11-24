@@ -50,6 +50,21 @@
     #panel td.der { text-align: right; }
     .fila-botones { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
     .fila-botones .btn { width: auto; flex: 1; }
+    .caja input[type=text]:not([hidden]) { width: 100%; font-size: 16px; }
+    .enlace { background: none; border: 0; padding: 0; color: #2a78d6; cursor: pointer; font: inherit; font-size: 13.5px; text-decoration: underline; }
+    .aviso-nube { border-radius: 10px; padding: 10px 12px; font-size: 13px; margin: 10px 0; }
+    .aviso-nube.mal { background: rgba(192, 57, 43, .08); border: 1px solid rgba(192, 57, 43, .35); }
+    /* indicador de la nube */
+    #indicador { position: fixed; right: calc(10px + env(safe-area-inset-right)); bottom: calc(10px + env(safe-area-inset-bottom));
+                 z-index: 5; display: none; align-items: center; gap: 6px; border: 1px solid var(--borde); border-radius: 999px;
+                 background: var(--superficie); box-shadow: var(--sombra); padding: 5px 11px; font-size: 12px; color: var(--tinta-2); cursor: pointer; }
+    body.abierta #indicador { display: inline-flex; }
+    #indicador .punto { width: 8px; height: 8px; border-radius: 50%; background: #9aa3ad; }
+    #indicador[data-fase=ok] .punto { background: #2e9d5b; }
+    #indicador[data-fase=subiendo] .punto { background: #2a78d6; }
+    #indicador[data-fase=pendiente] .punto { background: #d9962b; }
+    #indicador[data-fase=problema], #indicador[data-fase=error] { color: #c0392b; border-color: rgba(192, 57, 43, .5); }
+    #indicador[data-fase=problema] .punto, #indicador[data-fase=error] .punto { background: #c0392b; }
   </style>
 </head>
 <body>
@@ -75,6 +90,20 @@
         <input type="password" id="clave-nueva" autocomplete="new-password" minlength="8">
         <label for="clave-repetir">Repítela</label>
         <input type="password" id="clave-repetir" autocomplete="new-password" minlength="8">
+        <p class="nota" style="margin-top:14px">¿Ya tienes tus datos en GitHub (desde otro dispositivo)?
+          <button type="button" class="enlace" id="ir-recuperar">Recupéralos aquí</button></p>
+      </div>
+      <div id="modo-recuperar" hidden>
+        <h1>Recuperar mis datos</h1>
+        <p class="muted">Se bajan de tu repositorio privado y se abren con tu clave.</p>
+        <label for="rec-repo">Repositorio</label>
+        <input type="text" id="rec-repo" autocomplete="off" autocapitalize="off" spellcheck="false">
+        <label for="rec-token">Token de GitHub</label>
+        <input type="password" id="rec-token" autocomplete="off">
+        <input type="text" name="usuario" value="finanzas" autocomplete="username" hidden>
+        <label for="rec-clave">Tu clave de Finanzas</label>
+        <input type="password" id="rec-clave" autocomplete="current-password">
+        <p class="nota" style="margin-top:14px"><button type="button" class="enlace" id="ir-crear">Volver: empezar desde cero</button></p>
       </div>
       <div class="acciones"><button class="btn primario" id="boton-clave" type="submit" disabled>Cargando…</button></div>
       <div class="mensaje-error" id="error-clave" role="alert"></div>
@@ -83,6 +112,7 @@
   </div>
 
   <iframe id="vista" title="Finanzas personales"></iframe>
+  <button id="indicador" type="button" data-fase="apagado" title="Copia en la nube"><span class="punto"></span><span id="indicador-texto">Solo en este dispositivo</span></button>
 
   <!-- Panel «Seguridad» -->
   <dialog id="panel">
@@ -93,6 +123,49 @@
         <tr><td>Guardado en este dispositivo</td><td class="der" id="panel-guardado">—</td></tr>
         <tr><td>Protección contra borrado del navegador</td><td class="der" id="panel-persistente">—</td></tr>
       </tbody></table>
+
+      <h2>Copia en la nube (GitHub)</h2>
+      <div id="nube-apagada">
+        <p class="nota">Sin conectar: tus datos solo están en este dispositivo. Conéctalo a tu repositorio <strong>privado</strong>
+          para tener copia con historial y verlos en tus otros dispositivos. Solo se sube el archivo cifrado.</p>
+        <form id="form-nube">
+          <label for="nube-repo">Repositorio</label>
+          <input type="text" id="nube-repo" autocomplete="off" autocapitalize="off" spellcheck="false" required>
+          <label for="nube-token">Token de GitHub</label>
+          <input type="password" id="nube-token" autocomplete="off" required>
+          <div class="mensaje-error" id="nube-error" role="alert"></div>
+          <div class="fila-botones"><button class="btn primario" type="submit">Conectar</button></div>
+        </form>
+      </div>
+      <div id="nube-encendida" hidden>
+        <table><tbody>
+          <tr><td>Repositorio</td><td class="der" id="nube-repo-texto">—</td></tr>
+          <tr><td>Estado</td><td class="der" id="nube-estado">—</td></tr>
+          <tr><td>Última sincronización</td><td class="der" id="nube-fecha">—</td></tr>
+        </tbody></table>
+        <div id="nube-conflicto" class="aviso-nube mal" hidden>
+          <strong>La copia de la nube y la de este dispositivo son distintas.</strong>
+          Hubo cambios en otro dispositivo y también aquí. No se mezcló nada. Elige cuál conservar:
+          <ul style="margin:8px 0 0 18px; padding:0">
+            <li><strong>Usar la de la nube</strong>: los cambios de este dispositivo se guardan aparte (copia anterior).</li>
+            <li><strong>Usar la de este dispositivo</strong>: la de la nube queda en el historial de GitHub.</li>
+          </ul>
+        </div>
+        <div id="nube-clave" class="aviso-nube mal" hidden>
+          <strong>La copia de la nube usa otra clave</strong> (¿la cambiaste en otro dispositivo?). Escríbela para usar esa copia:
+          <input type="text" name="usuario" value="finanzas" autocomplete="username" hidden>
+          <input type="password" id="nube-clave-otra" autocomplete="current-password" style="width:100%; margin-top:8px; font-size:16px">
+        </div>
+        <div class="mensaje-error" id="nube-error-2" role="alert"></div>
+        <div class="fila-botones" id="nube-resolver" hidden>
+          <button class="btn primario" type="button" id="boton-usar-nube">Usar la de la nube</button>
+          <button class="btn" type="button" id="boton-usar-local">Usar la de este dispositivo</button>
+        </div>
+        <div class="fila-botones">
+          <button class="btn" type="button" id="boton-sincronizar">Sincronizar ahora</button>
+          <button class="btn" type="button" id="boton-desconectar">Desconectar</button>
+        </div>
+      </div>
 
       <h2>Cambiar la clave</h2>
       <form id="form-cambio">

@@ -4,9 +4,11 @@
 // y formularios. La URL interna de la app va en el #hash (atrás/adelante y recargar funcionan).
 //
 // Datos: la base SQLite vive en la memoria de Pyodide (/datos/finanzas.db). Tras cada cambio
-// se cifra con la clave (boveda.js) y se guarda en el dispositivo (IndexedDB).
+// se cifra con la clave (boveda.js), se guarda en el dispositivo (IndexedDB) y, si está
+// conectada, se sube a la nube: repositorio privado de GitHub (nube.js).
 
 import * as boveda from "./boveda.js";
+import * as nube from "./nube.js";
 
 const BASE = new URL("./", location.href);
 const $ = (id) => document.getElementById(id);
@@ -70,12 +72,20 @@ async function arrancar() {
   } catch (err) {
     return fallo("Este navegador no permite guardar datos (¿modo privado?).", err);
   }
-  const crear = !guardado;
-  $("modo-crear").hidden = !crear;
-  $("modo-abrir").hidden = crear;
-  $("boton-clave").textContent = crear ? "Crear clave y empezar" : "Abrir";
+  const TEXTOS = { crear: "Crear clave y empezar", abrir: "Abrir", recuperar: "Recuperar y abrir" };
+  let modo;
+  const ponerModo = (m) => {
+    modo = m;
+    for (const k of Object.keys(TEXTOS)) $("modo-" + k).hidden = k !== m;
+    $("boton-clave").textContent = TEXTOS[m];
+    $("error-clave").textContent = "";
+    ({ crear: $("clave-nueva"), abrir: $("clave"), recuperar: $("rec-token") })[m].focus();
+  };
+  $("rec-repo").value = nube.REPO_PREDETERMINADO;
+  $("ir-recuperar").addEventListener("click", () => ponerModo("recuperar"));
+  $("ir-crear").addEventListener("click", () => ponerModo("crear"));
   $("boton-clave").disabled = false;
-  (crear ? $("clave-nueva") : $("clave")).focus();
+  ponerModo(guardado ? "abrir" : "crear");
 
   $("form-clave").addEventListener("submit", async (ev) => {
     ev.preventDefault();
@@ -84,19 +94,31 @@ async function arrancar() {
     const boton = $("boton-clave");
     try {
       let bytes = null;
-      if (crear) {
+      if (modo === "crear") {
         const clave = $("clave-nueva").value;
         if (clave.length < 8) throw new Error("La clave debe tener al menos 8 caracteres.");
         if (clave !== $("clave-repetir").value) throw new Error("Las dos claves no coinciden.");
         boton.disabled = true; boton.textContent = "Preparando…";
         const sal = boveda.salNueva();
         sesion = { llave: await boveda.derivarLlave(clave, sal), sal };
+        await nube.cargar(sesion.llave);
+      } else if (modo === "recuperar") {
+        boton.disabled = true; boton.textContent = "Descargando…";
+        const r = await nube.recuperar($("rec-repo").value, $("rec-token").value, $("rec-clave").value);
+        sesion = { llave: r.llave, sal: r.sal };
+        bytes = r.bytes;
       } else {
         boton.disabled = true; boton.textContent = "Abriendo…";
+        const clave = $("clave").value;
         const { sal } = boveda.leerCabecera(guardado.sobre);
-        const llave = await boveda.derivarLlave($("clave").value, sal);
+        const llave = await boveda.derivarLlave(clave, sal);
         bytes = await boveda.descifrar(llave, guardado.sobre);
         sesion = { llave, sal };
+        if (await nube.cargar(llave)) {
+          boton.textContent = "Revisando la nube…";
+          const r = await nube.alAbrir(clave, llave, sal, guardado);
+          if (r) { bytes = r.bytes; sesion = { llave: r.llave, sal: r.sal }; }
+        }
       }
       boton.textContent = "Cargando…";
       await python;
@@ -104,10 +126,10 @@ async function arrancar() {
     } catch (err) {
       sesion = null;
       boton.disabled = false;
-      boton.textContent = crear ? "Crear clave y empezar" : "Abrir";
+      boton.textContent = TEXTOS[modo];
       if (err instanceof boveda.ClaveIncorrecta) {
         error.textContent = "Clave incorrecta.";
-        $("clave").select();
+        (modo === "recuperar" ? $("rec-clave") : $("clave")).select();
       } else if (err && err.name === "PythonError") {
         fallo("No se pudo abrir la app.", err);
       } else {
@@ -122,12 +144,21 @@ async function abrirApp(bytes) {
   py.globals.set("PREFIJO_STATIC", new URL("static/", BASE).href);
   py.runPython("from finanzas.web import puente\npuente.iniciar(PREFIJO_STATIC)");  // migra si hace falta
   peticionPy = py.pyimport("finanzas.web.puente").peticion;
-  await guardarBase();  // la primera vez (o tras una migración) queda guardada de inmediato
+  // La primera vez (o tras una migración) queda guardada de inmediato; si no cambió nada, no.
+  if (!bytes || !mismosBytes(bytes, py.FS.readFile(RUTA_DB))) await guardarBase();
   boveda.pedirPersistencia();
   $("puerta").hidden = true;
   vista.style.display = "block";
+  document.body.classList.add("abierta");
+  nube.subirAhora();  // cambios que quedaron sin subir (p. ej. sin internet)
   await navegar("GET", sinAvisos(desdeHash()) || "/", { historial: "reemplazar" });
   registrarServiceWorker();
+}
+
+function mismosBytes(a, b) {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
 }
 
 // ------------------------------------------------------------------ guardar cifrado
@@ -142,6 +173,7 @@ function guardarBase() {
       const bytes = py.FS.readFile(RUTA_DB);
       const sobre = await boveda.cifrar(sesion.llave, sesion.sal, bytes);
       await boveda.local.guardar("base", { sobre, guardado: new Date().toISOString(), bytes: bytes.length });
+      nube.programarSubida();
     } catch (err) {
       console.error("No se pudo guardar", err);
       alertaEnVista("¡No se pudo guardar en este dispositivo! No cierres la app y revisa el espacio disponible.\n\n" + (err.message || err));
@@ -166,6 +198,7 @@ document.addEventListener("visibilitychange", () => {
 
 async function bloquear() {
   await colaGuardado;
+  await Promise.race([nube.subirAhora(), new Promise((ok) => setTimeout(ok, 5000))]);
   sesion = null;
   location.reload();  // borra de la memoria la base descifrada y la llave
 }
@@ -355,8 +388,102 @@ async function abrirPanel() {
   $("panel-persistente").textContent = persistente ? "activa" : "no garantizada";
   $("cambio-error").textContent = "";
   $("form-cambio").reset();
-  $("panel").showModal();
+  $("nube-error").textContent = "";
+  $("nube-error-2").textContent = "";
+  $("nube-token").value = "";
+  if (!$("nube-repo").value) $("nube-repo").value = nube.REPO_PREDETERMINADO;
+  pintarNube(nube.estadoActual());
+  if (!$("panel").open) $("panel").showModal();
 }
+
+// ------------------------------------------------------------------ nube: indicador y panel
+
+const TEXTO_FASE = {
+  apagado: "Solo en este dispositivo", ok: "Sincronizado", subiendo: "Subiendo…",
+  pendiente: "Pendiente de subir", error: "Error de la nube",
+};
+
+function textoEstado(e) {
+  if (e.fase === "problema") return e.problema === "clave" ? "La nube usa otra clave" : "Conflicto: elige una copia";
+  return TEXTO_FASE[e.fase] || e.fase;
+}
+
+function pintarNube(e) {
+  const ind = $("indicador");
+  ind.dataset.fase = e.fase;
+  $("indicador-texto").textContent = textoEstado(e);
+  ind.title = e.detalle || "Copia en la nube";
+  const conectada = nube.configurada();
+  $("nube-apagada").hidden = conectada;
+  $("nube-encendida").hidden = !conectada;
+  if (!conectada) return;
+  $("nube-repo-texto").textContent = nube.repo();
+  $("nube-estado").textContent = textoEstado(e) + (e.detalle && e.fase !== "ok" ? " — " + e.detalle : "");
+  $("nube-fecha").textContent = e.sincronizado ? fechaHora(e.sincronizado) : "—";
+  $("nube-conflicto").hidden = e.problema !== "conflicto";
+  $("nube-clave").hidden = e.problema !== "clave";
+  $("nube-resolver").hidden = !e.problema;
+}
+
+nube.alCambiar(pintarNube);
+$("indicador").addEventListener("click", () => abrirPanel());
+
+/** Acciones delicadas: el primer toque pide confirmación, el segundo (antes de 6 s) ejecuta. */
+function confirmado(boton) {
+  if (boton.dataset.confirmar) { delete boton.dataset.confirmar; boton.textContent = boton.dataset.texto; return true; }
+  boton.dataset.texto = boton.textContent;
+  boton.dataset.confirmar = "1";
+  boton.textContent = "¿Seguro? Toca otra vez";
+  setTimeout(() => { if (boton.dataset.confirmar) { delete boton.dataset.confirmar; boton.textContent = boton.dataset.texto; } }, 6000);
+  return false;
+}
+
+async function conBoton(boton, salida, fn) {
+  salida.textContent = "";
+  boton.disabled = true;
+  try { await fn(); }
+  catch (err) { salida.textContent = err instanceof boveda.ClaveIncorrecta ? "Clave incorrecta." : (err.message || String(err)); }
+  finally { boton.disabled = false; }
+}
+
+$("form-nube").addEventListener("submit", (ev) => {
+  ev.preventDefault();
+  conBoton(ev.target.querySelector("button[type=submit]"), $("nube-error"), async () => {
+    await colaGuardado;
+    const r = await nube.conectar(sesion.llave, $("nube-repo").value, $("nube-token").value);
+    $("nube-token").value = "";
+    if (r === "subido") alertaEnVista("Conectado. Tus datos cifrados ya están en tu repositorio privado.", "ok");
+  });
+});
+
+$("boton-sincronizar").addEventListener("click", (ev) =>
+  conBoton(ev.currentTarget, $("nube-error-2"), async () => { await colaGuardado; await nube.subirAhora(); }));
+
+$("boton-desconectar").addEventListener("click", (ev) => {
+  if (!confirmado(ev.currentTarget)) return;
+  conBoton(ev.currentTarget, $("nube-error-2"), () => nube.desconectar());
+});
+
+$("boton-usar-local").addEventListener("click", (ev) => {
+  if (!confirmado(ev.currentTarget)) return;
+  conBoton(ev.currentTarget, $("nube-error-2"), async () => {
+    await colaGuardado;
+    await nube.usarCopiaLocal();
+    $("panel").close();
+    alertaEnVista("Listo: la nube quedó con la copia de este dispositivo.", "ok");
+  });
+});
+
+$("boton-usar-nube").addEventListener("click", (ev) => {
+  if (!confirmado(ev.currentTarget)) return;
+  conBoton(ev.currentTarget, $("nube-error-2"), async () => {
+    await colaGuardado;
+    const otra = nube.estadoActual().problema === "clave" ? $("nube-clave-otra").value : null;
+    await nube.usarCopiaNube(otra, otra ? null : sesion.llave, otra ? null : sesion.sal);
+    sesion = null;
+    location.reload();  // se abre la copia bajada (pide la clave otra vez)
+  });
+});
 
 $("boton-cerrar-panel").addEventListener("click", () => $("panel").close());
 $("boton-bloquear").addEventListener("click", () => bloquear());
@@ -378,6 +505,7 @@ $("form-cambio").addEventListener("submit", async (ev) => {
     await colaGuardado;
     const sal = boveda.salNueva();
     sesion = { llave: await boveda.derivarLlave(nueva, sal), sal };
+    await nube.alCambiarLlave(sesion.llave);
     await guardarBase();
     $("panel").close();
     alertaEnVista("Clave cambiada. Desde ahora, usa la clave nueva.", "ok");
@@ -402,6 +530,7 @@ window.finanzas = {
   get py() { return py; },
   get urlActual() { return urlActual; },
   get abierta() { return !!sesion; },
+  nube,
 };
 
 arrancar();
