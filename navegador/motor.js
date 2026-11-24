@@ -695,7 +695,9 @@ $("boton-versiones").addEventListener("click", (ev) =>
 
 function registrarServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
-  navigator.serviceWorker.register(new URL("sw.js", BASE)).catch((e) => console.warn("Service worker:", e));
+  navigator.serviceWorker.register(new URL("sw.js", BASE), { updateViaCache: "none" })
+    .then((reg) => reg.update())
+    .catch((e) => console.warn("Service worker:", e));
 }
 
 // Para las fases siguientes (sincronización) y para depurar.
